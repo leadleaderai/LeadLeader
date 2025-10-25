@@ -1,0 +1,9 @@
+{
+  "greeting": "Hi, this is LeadLeader. How can I help you today?",
+  "refinance": "Great — refinance options are one of our specialties. Can I get your preferred call-back time so a licensed officer can reach you?",
+  "loan": "Got it. Are you currently exploring new loan options or refinancing an existing one?",
+  "appointment": "Sure thing. What day and time work best for a quick consultation?",
+  "pricing": "Pricing depends on your needs — we offer flexible monthly options. Would you like me to send you a quick summary?",
+  "unknown": "Sorry, I didn't quite catch that. Could you rephrase?",
+  "end": "Thanks for calling LeadLeader. Have a great day!"
+}

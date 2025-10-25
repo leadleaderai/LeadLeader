@@ -1,0 +1,16 @@
+{
+  "tenants": [
+    {
+      "id": "leadleader-demo",
+      "name": "Lead-Leader Demo",
+      "timezone": "America/Los_Angeles",
+      "recipients": ["leadleader.ai@gmail.com"],
+      "open_hours": "always",
+      "consent_variant": "short",
+      "numbers": {
+        "twilio_incoming": "+1XXXXXXXXXX",
+        "caller_id_outbound": "+1YYYYYYYYYY"
+      }
+    }
+  ]
+}

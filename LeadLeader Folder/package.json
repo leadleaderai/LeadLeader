@@ -1,0 +1,19 @@
+{
+  "name": "leadleader-voicebot",
+  "version": "1.0.0",
+  "description": "LeadLeader voice receptionist (Twilio + Express) with modular dialogue and clean routing.",
+  "main": "index.js",
+  "scripts": {
+    "start": "node index.js"
+  },
+  "license": "ISC",
+  "dependencies": {
+  "@sendgrid/mail": "*",
+    "body-parser": "^2.2.0",
+    "dayjs": "^1.11.9",
+    "dotenv": "^16.4.5",
+    "express": "^5.1.0",
+    "googleapis": "^121.0.0",
+    "twilio": "^5.10.3"
+  }
+}
