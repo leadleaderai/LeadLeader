@@ -77,8 +77,8 @@ app.set('layout', 'layout');
 // ───────────────────────────────────────────────
 // Middleware
 // ───────────────────────────────────────────────
-app.use(express.json());
-app.use(express.urlencoded({ extended: true }));
+app.use(express.json({ limit: "1mb" }));
+app.use(express.urlencoded({ extended: true, limit: "1mb" }));
 
 // Serve static files from public directory
 app.use(express.static(path.join(__dirname, 'public')));
@@ -89,6 +89,9 @@ app.use(express.static(path.join(__dirname, 'public')));
 app.use((req, res, next) => {
   // Set default locals for all templates
   res.locals.version = 'v0.1';
+  res.locals.baseUrl = config.PUBLIC_BASE_URL || "";
+  res.locals.businessPhone = config.BUSINESS_PHONE || "";
+  res.locals.user = (req.session && req.session.user) || null;
   res.locals.year = new Date().getFullYear();
   res.locals.session = req.session || null;
   res.locals.navItems = [

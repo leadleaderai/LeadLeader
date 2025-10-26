@@ -1,17 +1,4 @@
-<%- include('partials/head', { title: '500 - Server Error' }) %>
-<div style="max-width:600px;margin:80px auto;padding:20px;text-align:center">
-  <h1 style="font-size:72px;margin:0;color:var(--text-muted)">500</h1>
-  <h2 style="margin:16px 0">Internal Server Error</h2>
-  <p style="color:var(--text-secondary);margin-bottom:32px">
-    Something went wrong on our end. We've been notified and are working on it.
-  </p>
-  <div style="display:flex;gap:12px;justify-content:center;flex-wrap:wrap">
-    <a href="/" style="padding:10px 20px;background:var(--button-bg);color:var(--button-text);text-decoration:none;border-radius:6px">
-      Go Home
-    </a>
-    <a href="/try" style="padding:10px 20px;background:var(--bg-secondary);color:var(--text-primary);text-decoration:none;border-radius:6px">
-      Try Demo
-    </a>
-  </div>
-</div>
+<%- include('partials/head', { title: 'Server error' }) %>
+<h1>Something went wrong</h1>
+<p class="muted">We've logged the error. Please try again later.</p>
 <%- include('partials/foot') %>
