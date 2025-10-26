@@ -195,3 +195,26 @@ html {
   }
 }
 
+/* LL THEME VARS */
+:root{
+  --bg:#ffffff; --text:#111827; --border:#e5e7eb; --card:#ffffff; --muted:#6b7280; --link:#0a58ca; --input:#f9fafb;
+}
+[data-theme="dark"]{
+  --bg:#0a0a0a; --text:#eaeaea; --border:#2a2a2a; --card:#151515; --muted:#a0a0a0; --link:#6eb9ff; --input:#111111;
+}
+html,body{background:var(--bg); color:var(--text); transition:background .2s,color .2s;}
+.container{max-width:960px;margin:0 auto;}
+.muted{color:var(--muted);}
+.card{background:var(--card); border:1px solid var(--border); border-radius:12px; padding:16px; margin:12px 0;}
+a{color:var(--link); text-decoration:none;} a:hover{text-decoration:underline;}
+/* Forms */
+form label{display:block; font-weight:600; margin:10px 0 6px;}
+form input, form select, form textarea{
+  width:100%; padding:10px 12px; border-radius:10px; border:1px solid var(--border);
+  background:var(--input); color:var(--text); outline:none;
+}
+button, .btn{
+  display:inline-flex; align-items:center; gap:8px; border:none; border-radius:10px; padding:10px 14px;
+  background:#0a58ca; color:#fff; cursor:pointer;
+}
+button:hover{opacity:.95}

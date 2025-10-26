@@ -270,3 +270,7 @@ app.use((err, req, res, next) => {
 });
 
 module.exports = app;
+
+// legal (privacy/terms)
+const legalRoutes = require('./routes/legal');
+app.use(legalRoutes);
