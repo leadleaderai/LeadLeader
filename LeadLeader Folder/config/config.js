@@ -90,7 +90,7 @@ function safe() {
     PORT: config.PORT,
     TENANT_ID: config.TENANT_ID,
     TENANT_TIMEZONE: config.TENANT_TIMEZONE,
-    RECIPIENTS: config.RECIPIENTS,
+    recipients_count: config.RECIPIENTS.length,
     FEATURES: {
       ai: config.ENABLE_AI_REDIRECT,
       transcribe: config.ENABLE_TRANSCRIBE,

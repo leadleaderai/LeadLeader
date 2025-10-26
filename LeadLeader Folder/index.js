@@ -314,8 +314,8 @@ app.get('/cron/daily', async (req, res) => {
   }
 });
 
-// Port configuration: prefer environment, then config, then default
-const PORT = process.env.PORT || config.PORT || 8080;
+// Port configuration: use centralized config
+const PORT = config.PORT;
 
 app.listen(PORT, '0.0.0.0', () => {
   console.log(`🚀 LeadLeader server running on port ${PORT}`);
