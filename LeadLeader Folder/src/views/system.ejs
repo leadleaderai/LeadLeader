@@ -1,0 +1,165 @@
+<div class="min-h-screen bg-gray-50 dark:bg-gray-900 py-8">
+  <div class="container mx-auto px-4">
+    <!-- Header -->
+    <div class="mb-8">
+      <h1 class="text-3xl font-bold text-gray-900 dark:text-white mb-2">
+        📊 System Dashboard
+      </h1>
+      <p class="text-gray-600 dark:text-gray-300">
+        Real-time monitoring and diagnostics
+      </p>
+    </div>
+
+    <!-- System Info Grid -->
+    <div class="grid md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
+      <div class="bg-white dark:bg-gray-800 rounded-lg shadow p-6">
+        <div class="text-sm text-gray-600 dark:text-gray-400 mb-1">Uptime</div>
+        <div class="text-2xl font-bold text-gray-900 dark:text-white">
+          <%= Math.floor(uptime / 60) %>m
+        </div>
+      </div>
+      <div class="bg-white dark:bg-gray-800 rounded-lg shadow p-6">
+        <div class="text-sm text-gray-600 dark:text-gray-400 mb-1">Node Version</div>
+        <div class="text-xl font-mono text-gray-900 dark:text-white">
+          <%= nodeVersion %>
+        </div>
+      </div>
+      <div class="bg-white dark:bg-gray-800 rounded-lg shadow p-6">
+        <div class="text-sm text-gray-600 dark:text-gray-400 mb-1">Memory RSS</div>
+        <div class="text-2xl font-bold text-gray-900 dark:text-white">
+          <%= Math.floor(memory.rss / 1024 / 1024) %> MB
+        </div>
+      </div>
+      <div class="bg-white dark:bg-gray-800 rounded-lg shadow p-6">
+        <div class="text-sm text-gray-600 dark:text-gray-400 mb-1">Platform</div>
+        <div class="text-xl font-mono text-gray-900 dark:text-white">
+          <%= platform %>
+        </div>
+      </div>
+    </div>
+
+    <!-- Metrics Grid -->
+    <div class="grid md:grid-cols-2 gap-6 mb-8">
+      <!-- Latency -->
+      <div class="bg-white dark:bg-gray-800 rounded-lg shadow p-6">
+        <h3 class="text-lg font-semibold text-gray-900 dark:text-white mb-4">Latency Metrics</h3>
+        <dl class="space-y-2">
+          <div class="flex justify-between">
+            <dt class="text-gray-600 dark:text-gray-400">Average:</dt>
+            <dd class="font-mono text-gray-900 dark:text-white"><%= stats.latency.avg.toFixed(2) %>ms</dd>
+          </div>
+          <div class="flex justify-between">
+            <dt class="text-gray-600 dark:text-gray-400">P95:</dt>
+            <dd class="font-mono text-gray-900 dark:text-white"><%= stats.latency.p95.toFixed(2) %>ms</dd>
+          </div>
+          <div class="flex justify-between">
+            <dt class="text-gray-600 dark:text-gray-400">Samples:</dt>
+            <dd class="font-mono text-gray-900 dark:text-white"><%= stats.latency.samples %></dd>
+          </div>
+        </dl>
+      </div>
+
+      <!-- Counters -->
+      <div class="bg-white dark:bg-gray-800 rounded-lg shadow p-6">
+        <h3 class="text-lg font-semibold text-gray-900 dark:text-white mb-4">Operation Counters</h3>
+        <dl class="space-y-2">
+          <div class="flex justify-between">
+            <dt class="text-gray-600 dark:text-gray-400">Uploads:</dt>
+            <dd class="font-mono text-gray-900 dark:text-white"><%= stats.counters.uploads %></dd>
+          </div>
+          <div class="flex justify-between">
+            <dt class="text-gray-600 dark:text-gray-400">Emails OK:</dt>
+            <dd class="font-mono text-green-600"><%= stats.counters.emailsSentOk %></dd>
+          </div>
+          <div class="flex justify-between">
+            <dt class="text-gray-600 dark:text-gray-400">Emails Err:</dt>
+            <dd class="font-mono text-red-600"><%= stats.counters.emailsSentErr %></dd>
+          </div>
+          <div class="flex justify-between">
+            <dt class="text-gray-600 dark:text-gray-400">Sheets OK:</dt>
+            <dd class="font-mono text-green-600"><%= stats.counters.sheetsOk %></dd>
+          </div>
+          <div class="flex justify-between">
+            <dt class="text-gray-600 dark:text-gray-400">Sheets Err:</dt>
+            <dd class="font-mono text-red-600"><%= stats.counters.sheetsErr %></dd>
+          </div>
+          <div class="flex justify-between">
+            <dt class="text-gray-600 dark:text-gray-400">Chat Turns:</dt>
+            <dd class="font-mono text-gray-900 dark:text-white"><%= stats.counters.chatTurns %></dd>
+          </div>
+        </dl>
+      </div>
+    </div>
+
+    <!-- Top Routes -->
+    <div class="bg-white dark:bg-gray-800 rounded-lg shadow p-6 mb-8">
+      <h3 class="text-lg font-semibold text-gray-900 dark:text-white mb-4">Top Routes</h3>
+      <div class="overflow-x-auto">
+        <table class="w-full text-sm">
+          <thead class="border-b dark:border-gray-700">
+            <tr>
+              <th class="text-left py-2 px-3 text-gray-600 dark:text-gray-400">Route</th>
+              <th class="text-right py-2 px-3 text-gray-600 dark:text-gray-400">Count</th>
+              <th class="text-right py-2 px-3 text-gray-600 dark:text-gray-400">Avg (ms)</th>
+              <th class="text-right py-2 px-3 text-gray-600 dark:text-gray-400">P95 (ms)</th>
+            </tr>
+          </thead>
+          <tbody>
+            <% if (stats.topRoutes.length === 0) { %>
+              <tr>
+                <td colspan="4" class="text-center py-4 text-gray-500 dark:text-gray-400">
+                  No route data yet
+                </td>
+              </tr>
+            <% } else { %>
+              <% stats.topRoutes.forEach(route => { %>
+                <tr class="border-b dark:border-gray-700">
+                  <td class="py-2 px-3 font-mono text-xs text-gray-900 dark:text-white"><%= route.route %></td>
+                  <td class="py-2 px-3 text-right font-mono text-gray-900 dark:text-white"><%= route.count %></td>
+                  <td class="py-2 px-3 text-right font-mono text-gray-900 dark:text-white"><%= route.avg.toFixed(2) %></td>
+                  <td class="py-2 px-3 text-right font-mono text-gray-900 dark:text-white"><%= route.p95.toFixed(2) %></td>
+                </tr>
+              <% }) %>
+            <% } %>
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    <!-- Recent Errors -->
+    <div class="bg-white dark:bg-gray-800 rounded-lg shadow p-6 mb-8">
+      <h3 class="text-lg font-semibold text-gray-900 dark:text-white mb-4">Recent Errors (Last 50)</h3>
+      <div class="space-y-2 max-h-64 overflow-y-auto">
+        <% if (stats.errors.length === 0) { %>
+          <p class="text-gray-500 dark:text-gray-400">No errors recorded</p>
+        <% } else { %>
+          <% stats.errors.forEach(err => { %>
+            <div class="text-xs font-mono bg-red-50 dark:bg-red-900/20 p-2 rounded">
+              <span class="text-gray-500 dark:text-gray-400"><%= err.ts %>:</span>
+              <span class="text-red-700 dark:text-red-400"><%= err.msg %></span>
+            </div>
+          <% }) %>
+        <% } %>
+      </div>
+    </div>
+
+    <!-- Ping Tool -->
+    <div class="bg-white dark:bg-gray-800 rounded-lg shadow p-6">
+      <h3 class="text-lg font-semibold text-gray-900 dark:text-white mb-4">Latency Ping Tool</h3>
+      <div class="flex gap-4 items-end">
+        <button 
+          id="pingBtn"
+          class="bg-blue-600 hover:bg-blue-700 text-white px-6 py-2 rounded-lg font-semibold transition"
+        >
+          Ping Server
+        </button>
+        <div>
+          <div class="text-sm text-gray-600 dark:text-gray-400">Last Result:</div>
+          <div id="pingResult" class="text-2xl font-mono text-gray-900 dark:text-white">-</div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script src="/js/system.js"></script>

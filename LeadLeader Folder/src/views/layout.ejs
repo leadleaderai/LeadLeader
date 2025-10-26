@@ -1,0 +1,220 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="description" content="<%= description %>">
+  <title><%= title %></title>
+  
+  <!-- Tailwind CSS CDN -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>
+    tailwind.config = {
+      darkMode: 'class',
+      theme: {
+        extend: {
+          colors: {
+            primary: '#007bff',
+            secondary: '#6c757d'
+          }
+        }
+      }
+    }
+  </script>
+  
+  <!-- Custom CSS -->
+  <link rel="stylesheet" href="/css/custom.css">
+  
+  <!-- Theme loader (inline to prevent flash) -->
+  <script>
+    (function() {
+      const stored = localStorage.getItem('leadleader-theme');
+      if (stored === 'dark') {
+        document.documentElement.classList.add('dark');
+      } else if (!stored && window.matchMedia('(prefers-color-scheme: dark)').matches) {
+        document.documentElement.classList.add('dark');
+      }
+    })();
+  </script>
+  
+  <!-- Favicon placeholder -->
+  <link rel="icon" type="image/png" href="/images/logo.png">
+</head>
+<body class="min-h-screen flex flex-col bg-gray-50 dark:bg-gray-900">
+  
+  <!-- Navigation -->
+  <nav class="bg-white dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700">
+    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+      <div class="flex justify-between h-16">
+        <div class="flex">
+          <!-- Logo -->
+          <div class="flex-shrink-0 flex items-center">
+            <a href="/" class="text-2xl font-bold text-primary">
+              🎙️ LeadLeader
+            </a>
+            <span class="ml-3 px-2 py-1 text-xs bg-blue-100 dark:bg-blue-900 text-blue-800 dark:text-blue-200 rounded">
+              <%= version %>
+            </span>
+          </div>
+          
+          <!-- Navigation Links -->
+          <div class="hidden sm:ml-8 sm:flex sm:space-x-8">
+            <% navItems.forEach(item => { %>
+              <a href="<%= item.href %>" 
+                 class="<%= item.active ? 'border-primary text-gray-900 dark:text-white' : 'border-transparent text-gray-500 dark:text-gray-400 hover:border-gray-300 hover:text-gray-700 dark:hover:text-gray-300' %> inline-flex items-center px-1 pt-1 border-b-2 text-sm font-medium">
+                <%= item.label %>
+              </a>
+            <% }) %>
+          </div>
+        </div>
+        
+        <!-- Right side: Theme toggle & auth -->
+        <div class="flex items-center space-x-4">
+          <!-- Theme Toggle with SVG icons -->
+          <button id="themeToggle" class="p-2 text-gray-600 dark:text-gray-300 hover:text-gray-900 dark:hover:text-white transition" title="Toggle theme" aria-label="Toggle theme">
+            <svg id="sunIcon" class="w-5 h-5 hidden" fill="currentColor" viewBox="0 0 20 20">
+              <path fill-rule="evenodd" d="M10 2a1 1 0 011 1v1a1 1 0 11-2 0V3a1 1 0 011-1zm4 8a4 4 0 11-8 0 4 4 0 018 0zm-.464 4.95l.707.707a1 1 0 001.414-1.414l-.707-.707a1 1 0 00-1.414 1.414zm2.12-10.607a1 1 0 010 1.414l-.706.707a1 1 0 11-1.414-1.414l.707-.707a1 1 0 011.414 0zM17 11a1 1 0 100-2h-1a1 1 0 100 2h1zm-7 4a1 1 0 011 1v1a1 1 0 11-2 0v-1a1 1 0 011-1zM5.05 6.464A1 1 0 106.465 5.05l-.708-.707a1 1 0 00-1.414 1.414l.707.707zm1.414 8.486l-.707.707a1 1 0 01-1.414-1.414l.707-.707a1 1 0 011.414 1.414zM4 11a1 1 0 100-2H3a1 1 0 000 2h1z" clip-rule="evenodd" />
+            </svg>
+            <svg id="moonIcon" class="w-5 h-5 hidden" fill="currentColor" viewBox="0 0 20 20">
+              <path d="M17.293 13.293A8 8 0 016.707 2.707a8.001 8.001 0 1010.586 10.586z" />
+            </svg>
+          </button>
+          
+          <!-- Auth navigation -->
+          <% if (typeof session !== 'undefined' && session && session.user) { %>
+            <!-- Logged in -->
+            <% if (session.user.role === 'owner') { %>
+              <a href="/owner" class="text-sm text-gray-600 dark:text-gray-300 hover:text-primary transition">
+                Owner Panel
+              </a>
+              <a href="/owner/users" class="text-sm text-gray-600 dark:text-gray-300 hover:text-primary transition">
+                Users
+              </a>
+            <% } else { %>
+              <a href="/dashboard" class="text-sm text-gray-600 dark:text-gray-300 hover:text-primary transition">
+                Dashboard
+              </a>
+            <% } %>
+            
+            <!-- User menu -->
+            <div class="relative">
+              <span class="text-sm text-gray-900 dark:text-white font-medium">
+                <%= session.user.username %>
+              </span>
+            </div>
+            
+            <form action="/auth/logout" method="POST" class="inline">
+              <button type="submit" class="text-sm text-gray-600 dark:text-gray-300 hover:text-primary transition">
+                Logout
+              </button>
+            </form>
+          <% } else { %>
+            <!-- Not logged in -->
+            <a href="/auth/login" class="text-sm text-gray-600 dark:text-gray-300 hover:text-primary transition">
+              Log in
+            </a>
+            <a href="/auth/signup" class="text-sm text-gray-600 dark:text-gray-300 hover:text-primary transition">
+              Sign up
+            </a>
+          <% } %>
+        </div>
+        
+        <!-- Mobile menu button -->
+        <div class="flex items-center sm:hidden">
+          <button type="button" id="mobile-menu-button" class="inline-flex items-center justify-center p-2 rounded-md text-gray-400 hover:text-gray-500 hover:bg-gray-100 dark:hover:bg-gray-700 focus:outline-none focus:ring-2 focus:ring-inset focus:ring-primary">
+            <svg class="block h-6 w-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h16" />
+            </svg>
+          </button>
+        </div>
+      </div>
+    </div>
+    
+    <!-- Mobile menu -->
+    <div class="hidden sm:hidden" id="mobile-menu">
+      <div class="pt-2 pb-3 space-y-1">
+        <% navItems.forEach(item => { %>
+          <a href="<%= item.href %>" 
+             class="<%= item.active ? 'bg-blue-50 dark:bg-blue-900 border-primary text-primary' : 'border-transparent text-gray-600 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-gray-700 hover:border-gray-300 hover:text-gray-800 dark:hover:text-gray-200' %> block pl-3 pr-4 py-2 border-l-4 text-base font-medium">
+            <%= item.label %>
+          </a>
+        <% }) %>
+      </div>
+    </div>
+  </nav>
+  
+  <!-- Main Content -->
+  <main class="flex-grow">
+    <%- body %>
+  </main>
+  
+  <!-- Footer -->
+  <footer class="bg-white dark:bg-gray-800 border-t border-gray-200 dark:border-gray-700 mt-auto">
+    <div class="max-w-7xl mx-auto py-8 px-4 sm:px-6 lg:px-8">
+      <div class="grid grid-cols-1 md:grid-cols-3 gap-8">
+        <!-- Company Info -->
+        <div>
+          <h3 class="text-sm font-semibold text-gray-600 dark:text-gray-400 tracking-wider uppercase mb-4">
+            LeadLeader Platform
+          </h3>
+          <p class="text-gray-500 dark:text-gray-400 text-sm">
+            AI-powered call assistant & automation platform. Transform voice interactions into actionable insights.
+          </p>
+        </div>
+        
+        <!-- Quick Links -->
+        <div>
+          <h3 class="text-sm font-semibold text-gray-600 dark:text-gray-400 tracking-wider uppercase mb-4">
+            Quick Links
+          </h3>
+          <ul class="space-y-2">
+            <li><a href="/try" class="text-gray-500 dark:text-gray-400 hover:text-primary text-sm">Try Demos</a></li>
+            <li><a href="/dashboard" class="text-gray-500 dark:text-gray-400 hover:text-primary text-sm">Dashboard</a></li>
+            <li><a href="/contact" class="text-gray-500 dark:text-gray-400 hover:text-primary text-sm">Contact Us</a></li>
+            <% if (typeof session !== 'undefined' && session && session.owner) { %>
+              <li><a href="/system" class="text-gray-500 dark:text-gray-400 hover:text-primary text-sm">System Status</a></li>
+            <% } %>
+          </ul>
+        </div>
+        
+        <!-- Future Features -->
+        <div>
+          <h3 class="text-sm font-semibold text-gray-600 dark:text-gray-400 tracking-wider uppercase mb-4">
+            Coming Soon
+          </h3>
+          <ul class="space-y-2 text-gray-400 dark:text-gray-500 text-sm">
+            <li>🔐 Client Portal</li>
+            <li>📊 Advanced Analytics</li>
+            <li>🔗 Workflow Automation</li>
+            <li>🎯 Custom AI Prompts</li>
+          </ul>
+        </div>
+      </div>
+      
+      <div class="mt-8 border-t border-gray-200 dark:border-gray-700 pt-8">
+        <p class="text-center text-gray-400 dark:text-gray-500 text-sm">
+          &copy; <%= year %> LeadLeader. All rights reserved.
+        </p>
+      </div>
+    </div>
+  </footer>
+  
+  <!-- Theme toggle script -->
+  <script src="/js/theme.js"></script>
+  
+  <!-- Mobile menu toggle script -->
+  <script>
+    const mobileMenuButton = document.getElementById('mobile-menu-button');
+    const mobileMenu = document.getElementById('mobile-menu');
+    
+    if (mobileMenuButton && mobileMenu) {
+      mobileMenuButton.addEventListener('click', () => {
+        mobileMenu.classList.toggle('hidden');
+      });
+    }
+  </script>
+  
+  <!-- Page-specific scripts -->
+  <script src="/js/client.js"></script>
+</body>
+</html>

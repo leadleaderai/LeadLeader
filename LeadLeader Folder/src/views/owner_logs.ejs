@@ -1,0 +1,25 @@
+<%- include('partials/head', { title: title || 'Owner: Logs' }) %>
+<div style="max-width:1200px;margin:0 auto;padding:20px">
+  <h1>Owner: Logs</h1>
+  <p style="color:var(--text-secondary);margin-bottom:20px">Last 200 entries from app.ndjson</p>
+  
+  <% if (typeof error !== 'undefined' && error) { %>
+    <div class="alert-error" style="padding:12px;border-radius:6px;margin-bottom:16px">
+      Error loading logs: <%= error %>
+    </div>
+  <% } %>
+  
+  <% if (!logs || logs.length === 0) { %>
+    <div class="alert-error" style="padding:12px;border-radius:6px">
+      No log entries found
+    </div>
+  <% } else { %>
+    <pre style="background:var(--bg-secondary);padding:16px;border-radius:8px;overflow-x:auto;font-size:12px;line-height:1.6;max-height:600px;overflow-y:auto"><% logs.forEach(line => { %><%= line %>
+<% }) %></pre>
+  <% } %>
+  
+  <div style="margin-top:20px">
+    <a href="/owner/users" style="color:var(--link-color)">← Back to Users</a>
+  </div>
+</div>
+<%- include('partials/foot') %>

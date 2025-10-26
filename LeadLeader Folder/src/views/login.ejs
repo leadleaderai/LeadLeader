@@ -1,0 +1,55 @@
+<%- include('partials/head', { title: title || 'Log in' }) %>
+<div style="max-width:400px;margin:40px auto;padding:20px">
+  <h1 style="margin-bottom:24px">Log in</h1>
+  <div id="errorMsg" class="alert-error" style="display:none;padding:12px;border-radius:6px;margin-bottom:16px"></div>
+  <form id="loginForm" method="post" action="/auth/login" style="display:flex;flex-direction:column;gap:16px">
+    <div>
+      <label style="display:block;margin-bottom:6px;font-weight:500">Username</label>
+      <input name="username" required minlength="3" maxlength="32" pattern="[A-Za-z0-9_]+" 
+             style="width:100%;padding:10px;border:1px solid var(--input-border);border-radius:6px">
+    </div>
+    <div>
+      <label style="display:block;margin-bottom:6px;font-weight:500">Password</label>
+      <input type="password" name="password" required minlength="8" maxlength="128"
+             style="width:100%;padding:10px;border:1px solid var(--input-border);border-radius:6px">
+    </div>
+    <button type="submit" style="padding:12px;border-radius:6px;font-weight:600;cursor:pointer">
+      Log in
+    </button>
+  </form>
+  <p style="margin-top:20px;text-align:center">
+    New here? <a href="/auth/signup">Create an account</a>
+  </p>
+</div>
+<script>
+const form = document.getElementById('loginForm');
+const errorMsg = document.getElementById('errorMsg');
+form.addEventListener('submit', async (e)=>{
+  e.preventDefault();
+  errorMsg.style.display = 'none';
+  const btn = form.querySelector('button');
+  btn.disabled = true;
+  btn.textContent = 'Logging in...';
+  
+  try {
+    const fd = new FormData(form);
+    const r = await fetch('/auth/login', {method:'POST', body:fd});
+    const j = await r.json();
+    
+    if(j.ok) {
+      location.href = j.redirect || '/dashboard';
+    } else {
+      errorMsg.textContent = j.error || 'Login failed';
+      errorMsg.style.display = 'block';
+      btn.disabled = false;
+      btn.textContent = 'Log in';
+    }
+  } catch(err) {
+    errorMsg.textContent = 'Network error. Please try again.';
+    errorMsg.style.display = 'block';
+    btn.disabled = false;
+    btn.textContent = 'Log in';
+  }
+});
+</script>
+<%- include('partials/foot') %>

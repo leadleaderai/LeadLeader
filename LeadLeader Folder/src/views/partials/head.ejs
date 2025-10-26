@@ -1,0 +1,32 @@
+<!doctype html><html><head>
+<meta charset="utf-8"/>
+<title><%= title||'LeadLeader' %></title>
+<meta name="viewport" content="width=device-width,initial-scale=1"/>
+<meta name="description" content="<%= typeof description !== 'undefined' && description ? description : 'LeadLeader - AI-powered voice and chat solutions for your business' %>"/>
+<link rel="icon" type="image/svg+xml" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='0.9em' font-size='90'>📞</text></svg>"/>
+<meta property="og:title" content="<%= title||'LeadLeader' %>"/>
+<meta property="og:description" content="<%= typeof description !== 'undefined' && description ? description : 'AI-powered voice and chat solutions' %>"/>
+<meta property="og:type" content="website"/>
+<link rel="stylesheet" href="/css/custom.css">
+</head><body>
+<header style="display:flex;gap:14px;align-items:center;justify-content:space-between;padding:12px 16px;border-bottom:1px solid var(--border-color)">
+  <nav style="display:flex;gap:12px;align-items:center">
+    <a href="/">Home</a><a href="/try">Try</a><a href="/system">System</a>
+    <% if (typeof user !== 'undefined' && user && user.role === 'owner') { %>
+      <a href="/owner/users">Users</a><a href="/owner/logs">Logs</a>
+    <% } %>
+  </nav>
+  <div style="display:flex;gap:12px;align-items:center">
+    <% if (typeof user !== 'undefined' && user) { %>
+      <span style="margin-right:8px;color:var(--text-secondary)">@<%= user.username %></span>
+      <a href="/dashboard">Dashboard</a>
+      <form method="post" action="/auth/logout" style="display:inline;margin:0">
+        <button type="submit" style="background:none;border:none;color:var(--link-color);cursor:pointer;text-decoration:underline">Logout</button>
+      </form>
+    <% } else { %>
+      <a href="/auth/login">Log in</a><a href="/auth/signup">Sign up</a>
+    <% } %>
+    <button id="theme-toggle" aria-label="Toggle theme" style="background:none;border:none;cursor:pointer;color:inherit;padding:4px 8px"><span id="theme-icon"></span></button>
+  </div>
+</header>
+<main class="container" style="padding:16px">

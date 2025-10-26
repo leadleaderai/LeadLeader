@@ -3,6 +3,11 @@ primary_region = "iad"
 
 [env]
   PORT = "8080"
+  DATA_DIR = "/app/data"
+
+[mounts]
+  source = "data"
+  destination = "/app/data"
 
 [experimental]
   allowed_public_ports = [8080]

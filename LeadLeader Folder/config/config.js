@@ -29,7 +29,7 @@ if (process.env.GOOGLE_SERVICE_ACCOUNT_JSON) {
       googleServiceAccount = JSON.parse(decoded);
     } catch (err2) {
       // failed to parse; keep null and warn once
-      console.warn('⚠️  config: GOOGLE_SERVICE_ACCOUNT_JSON present but could not be parsed. Transcription/calendar features may be disabled.');
+      console.warn('⚠️  config: GOOGLE_SERVICE_ACCOUNT_JSON present but could not be parsed. Sheets features may be disabled.');
       googleServiceAccount = null;
     }
   }
@@ -45,22 +45,25 @@ const config = {
   TENANT_TIMEZONE: process.env.TENANT_TIMEZONE || 'America/Los_Angeles',
   RECIPIENTS: process.env.RECIPIENTS ? String(process.env.RECIPIENTS).split(',').map(s => s.trim()).filter(Boolean) : ['you@example.com'],
 
-  // Sheets / SendGrid / Twilio
+  // Google Sheets
   SHEETS_SPREADSHEET_ID: process.env.SHEETS_SPREADSHEET_ID || null,
-  SENDGRID_API_KEY: process.env.SENDGRID_API_KEY || null,
-  SENDGRID_FROM: process.env.SENDGRID_FROM || null,
-  TWILIO_ACCOUNT_SID: process.env.TWILIO_ACCOUNT_SID || null,
-  TWILIO_AUTH_TOKEN: process.env.TWILIO_AUTH_TOKEN || null,
-  TWILIO_NUMBER: process.env.TWILIO_NUMBER || null,
-
   GOOGLE_SERVICE_ACCOUNT_JSON: googleServiceAccount,
 
+  // SendGrid
+  SENDGRID_API_KEY: process.env.SENDGRID_API_KEY || null,
+  SENDGRID_FROM: process.env.SENDGRID_FROM || null,
+
+  // AWS (Polly)
+  AWS_ACCESS_KEY_ID: process.env.AWS_ACCESS_KEY_ID || null,
+  AWS_SECRET_ACCESS_KEY: process.env.AWS_SECRET_ACCESS_KEY || null,
+  AWS_REGION: process.env.AWS_REGION || 'us-east-1',
+
+  // Misc
   CRON_SECRET: process.env.CRON_SECRET || null,
 
-  // Feature flags (off by default for safety)
-  ENABLE_AI_REDIRECT: parseBool(process.env.ENABLE_AI_REDIRECT, false),
+  // Feature flags
   ENABLE_TRANSCRIBE: parseBool(process.env.ENABLE_TRANSCRIBE, false),
-  VALIDATE_TWILIO_SIGNATURE: parseBool(process.env.VALIDATE_TWILIO_SIGNATURE, false),
+  ENABLE_POLLY: parseBool(process.env.ENABLE_POLLY, false),
 
   // Low-level raw env (do not expose full contents)
   _raw: process.env
@@ -73,16 +76,12 @@ function validateFeatureDeps() {
   if (config.ENABLE_TRANSCRIBE && !config.GOOGLE_SERVICE_ACCOUNT_JSON) {
     console.warn('⚠️  ENABLE_TRANSCRIBE set but Google service account not configured.');
   }
+  if (config.ENABLE_POLLY && (!config.AWS_ACCESS_KEY_ID || !config.AWS_SECRET_ACCESS_KEY)) {
+    console.warn('⚠️  ENABLE_POLLY set but AWS credentials not configured.');
+  }
 }
 
 validateFeatureDeps();
-
-function redact(val) {
-  if (val === null || val === undefined) return null;
-  const s = String(val);
-  if (s.length <= 8) return '<redacted>';
-  return s.slice(0, 4) + '…' + s.slice(-4);
-}
 
 function safe() {
   return {
@@ -92,9 +91,8 @@ function safe() {
     TENANT_TIMEZONE: config.TENANT_TIMEZONE,
     recipients_count: config.RECIPIENTS.length,
     FEATURES: {
-      ai: config.ENABLE_AI_REDIRECT,
       transcribe: config.ENABLE_TRANSCRIBE,
-      validate_twilio: config.VALIDATE_TWILIO_SIGNATURE
+      polly: config.ENABLE_POLLY
     }
   };
 }

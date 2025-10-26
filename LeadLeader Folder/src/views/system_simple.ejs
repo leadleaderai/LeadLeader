@@ -1,0 +1,99 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8" />
+  <title><%= title %></title>
+  <meta name="viewport" content="width=device-width,initial-scale=1"/>
+  <style>
+    :root {
+      --bg: #ffffff;
+      --text: #111827;
+      --border: #e5e7eb;
+      --card-bg: #ffffff;
+      --muted: #6b7280;
+      --code-bg: #f6f8fa;
+      --link: #0a58ca;
+    }
+    [data-theme="dark"] {
+      --bg: #0a0a0a;
+      --text: #eaeaea;
+      --border: #2a2a2a;
+      --card-bg: #1a1a1a;
+      --muted: #a0a0a0;
+      --code-bg: #2a2a2a;
+      --link: #6eb9ff;
+    }
+    body { 
+      font-family: system-ui, -apple-system, sans-serif; 
+      margin: 40px; 
+      max-width: 1200px;
+      background: var(--bg);
+      color: var(--text);
+      transition: background 0.2s, color 0.2s;
+    }
+    h1 { margin: 0 0 10px; }
+    .grid { display: grid; grid-template-columns: repeat(auto-fit,minmax(220px,1fr)); gap: 12px; margin-bottom: 20px; }
+    .card { 
+      border: 1px solid var(--border); 
+      border-radius: 10px; 
+      padding: 14px; 
+      background: var(--card-bg); 
+    }
+    .muted { color: var(--muted); }
+    code { background: var(--code-bg); padding: 2px 6px; border-radius: 6px; color: var(--text); }
+    a { text-decoration: none; color: var(--link); }
+    a:hover { text-decoration: underline; }
+    .features-list { list-style: none; padding: 0; margin: 8px 0 0 0; font-size: 14px; }
+    .features-list li { margin: 4px 0; }
+    .status-yes { color: #10b981; }
+    .status-no { color: #ef4444; }
+  </style>
+</head>
+<body>
+  <h1>System Health</h1>
+  <p class="muted">As of <code><%= nowIso %></code></p>
+
+  <div class="grid">
+    <div class="card"><b>Status</b><br>OK</div>
+    <div class="card"><b>Uptime</b><br><%= uptimeSec %>s</div>
+    <div class="card"><b>Node</b><br><code><%= node %></code></div>
+    <div class="card"><b>Platform</b><br><%= platform %></div>
+    <div class="card"><b>CPUs</b><br><%= cpus %></div>
+    <div class="card"><b>RSS</b><br><%= rssMB %> MB</div>
+    <div class="card"><b>Heap</b><br><%= heapUsedMB %>/<%= heapTotalMB %> MB</div>
+    <div class="card"><b>Load (1/5/15)</b><br><%= load1 %> / <%= load5 %> / <%= load15 %></div>
+  </div>
+
+  <h2 style="margin-top:32px;margin-bottom:12px">Features</h2>
+  <div class="grid">
+    <div class="card">
+      <b>Feature Flags</b>
+      <ul class="features-list">
+        <li><span class="<%= enableTranscribe ? 'status-yes' : 'status-no' %>">●</span> Transcribe</li>
+        <li><span class="<%= enablePolly ? 'status-yes' : 'status-no' %>">●</span> Polly TTS</li>
+        <li><span class="<%= enableTextChat ? 'status-yes' : 'status-no' %>">●</span> Text Chat</li>
+        <li><span class="<%= enableSystemDash ? 'status-yes' : 'status-no' %>">●</span> System Dashboard</li>
+        <li><span class="<%= signupEnabled ? 'status-yes' : 'status-no' %>">●</span> Signups</li>
+        <li><span class="<%= requireHCaptcha ? 'status-yes' : 'status-no' %>">●</span> hCaptcha</li>
+      </ul>
+    </div>
+    <div class="card">
+      <b>Build Info</b>
+      <ul class="features-list">
+        <li><b>Env:</b> <%= nodeEnv %></li>
+        <% if (appVersion) { %><li><b>Version:</b> <%= appVersion %></li><% } %>
+        <% if (region) { %><li><b>Region:</b> <%= region %></li><% } %>
+        <% if (baseUrl) { %><li><b>Base URL:</b> <%= baseUrl %></li><% } %>
+      </ul>
+    </div>
+  </div>
+
+  <p style="margin-top:24px">
+    Quick checks:
+    <a href="/_health">/_health</a> •
+    <a href="/system/ping">/system/ping</a> •
+    <a href="/">Home</a> •
+    <a href="/try">Try Hub</a>
+  </p>
+</body>
+</html>

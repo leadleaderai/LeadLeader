@@ -1,0 +1,205 @@
+<div class="min-h-screen bg-gray-50 dark:bg-gray-900 py-8">
+  <div class="container mx-auto px-4">
+    <!-- Header with Logout -->
+    <div class="flex justify-between items-center mb-8">
+      <div>
+        <h1 class="text-3xl font-bold text-gray-900 dark:text-white mb-2">
+          🔧 Owner Panel
+        </h1>
+        <p class="text-gray-600 dark:text-gray-300">
+          System control and monitoring
+        </p>
+      </div>
+      <form method="POST" action="/owner/logout">
+        <button 
+          type="submit"
+          class="bg-red-600 hover:bg-red-700 text-white px-4 py-2 rounded-lg font-semibold transition"
+        >
+          Logout
+        </button>
+      </form>
+    </div>
+
+    <!-- Tabs -->
+    <div class="border-b border-gray-200 dark:border-gray-700 mb-8">
+      <nav class="-mb-px flex space-x-8">
+        <button 
+          class="tab-btn active py-4 px-1 border-b-2 font-medium text-sm" 
+          data-tab="overview"
+        >
+          Overview
+        </button>
+        <button 
+          class="tab-btn py-4 px-1 border-b-2 font-medium text-sm" 
+          data-tab="messages"
+        >
+          Messages
+        </button>
+        <button 
+          class="tab-btn py-4 px-1 border-b-2 font-medium text-sm" 
+          data-tab="settings"
+        >
+          Settings
+        </button>
+        <button 
+          class="tab-btn py-4 px-1 border-b-2 font-medium text-sm" 
+          data-tab="docs"
+        >
+          Docs
+        </button>
+      </nav>
+    </div>
+
+    <!-- Tab: Overview -->
+    <div id="tab-overview" class="tab-content">
+      <div class="grid md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
+        <div class="bg-white dark:bg-gray-800 rounded-lg shadow p-6">
+          <div class="text-sm text-gray-600 dark:text-gray-400 mb-1">Uptime</div>
+          <div class="text-2xl font-bold text-gray-900 dark:text-white">
+            <%= Math.floor(uptime / 60) %>m
+          </div>
+        </div>
+        <div class="bg-white dark:bg-gray-800 rounded-lg shadow p-6">
+          <div class="text-sm text-gray-600 dark:text-gray-400 mb-1">Emails Sent</div>
+          <div class="text-2xl font-bold text-green-600">
+            <%= stats.counters.emailsSentOk %>
+          </div>
+        </div>
+        <div class="bg-white dark:bg-gray-800 rounded-lg shadow p-6">
+          <div class="text-sm text-gray-600 dark:text-gray-400 mb-1">Sheets Writes</div>
+          <div class="text-2xl font-bold text-blue-600">
+            <%= stats.counters.sheetsOk %>
+          </div>
+        </div>
+        <div class="bg-white dark:bg-gray-800 rounded-lg shadow p-6">
+          <div class="text-sm text-gray-600 dark:text-gray-400 mb-1">Uploads</div>
+          <div class="text-2xl font-bold text-purple-600">
+            <%= stats.counters.uploads %>
+          </div>
+        </div>
+      </div>
+
+      <div class="grid lg:grid-cols-2 gap-6">
+        <div class="bg-white dark:bg-gray-800 rounded-lg shadow p-6">
+          <h3 class="text-lg font-semibold text-gray-900 dark:text-white mb-4">Latency Stats</h3>
+          <dl class="space-y-2">
+            <div class="flex justify-between">
+              <dt class="text-gray-600 dark:text-gray-400">Average:</dt>
+              <dd class="font-mono text-gray-900 dark:text-white"><%= stats.latency.avg.toFixed(2) %>ms</dd>
+            </div>
+            <div class="flex justify-between">
+              <dt class="text-gray-600 dark:text-gray-400">P95:</dt>
+              <dd class="font-mono text-gray-900 dark:text-white"><%= stats.latency.p95.toFixed(2) %>ms</dd>
+            </div>
+            <div class="flex justify-between">
+              <dt class="text-gray-600 dark:text-gray-400">Samples:</dt>
+              <dd class="font-mono text-gray-900 dark:text-white"><%= stats.latency.samples %></dd>
+            </div>
+          </dl>
+        </div>
+
+        <div class="bg-white dark:bg-gray-800 rounded-lg shadow p-6">
+          <h3 class="text-lg font-semibold text-gray-900 dark:text-white mb-4">Traffic</h3>
+          <dl class="space-y-2">
+            <div class="flex justify-between">
+              <dt class="text-gray-600 dark:text-gray-400">Last 5 min:</dt>
+              <dd class="font-mono text-gray-900 dark:text-white"><%= stats.traffic.last5min %> req</dd>
+            </div>
+            <div class="flex justify-between">
+              <dt class="text-gray-600 dark:text-gray-400">Last 15 min:</dt>
+              <dd class="font-mono text-gray-900 dark:text-white"><%= stats.traffic.last15min %> req</dd>
+            </div>
+          </dl>
+        </div>
+      </div>
+    </div>
+
+    <!-- Tab: Messages (stub) -->
+    <div id="tab-messages" class="tab-content hidden">
+      <div class="bg-white dark:bg-gray-800 rounded-lg shadow p-6">
+        <h3 class="text-lg font-semibold text-gray-900 dark:text-white mb-4">Recent Messages</h3>
+        <p class="text-gray-600 dark:text-gray-400">
+          Integration with Google Sheets or email logs coming soon.
+        </p>
+      </div>
+    </div>
+
+    <!-- Tab: Settings (stub) -->
+    <div id="tab-settings" class="tab-content hidden">
+      <div class="bg-white dark:bg-gray-800 rounded-lg shadow p-6">
+        <h3 class="text-lg font-semibold text-gray-900 dark:text-white mb-4">Runtime Settings</h3>
+        <p class="text-gray-600 dark:text-gray-400 mb-4">
+          Runtime configuration overrides (feature in development).
+        </p>
+        <form id="settingsForm">
+          <div class="space-y-4">
+            <div>
+              <label class="flex items-center">
+                <input type="checkbox" class="mr-2" disabled>
+                <span class="text-gray-700 dark:text-gray-300">Enable maintenance mode</span>
+              </label>
+            </div>
+            <div>
+              <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                Rate limit multiplier:
+              </label>
+              <input type="number" class="w-32 px-3 py-2 border rounded-lg dark:bg-gray-700" value="1.0" step="0.1" disabled>
+            </div>
+          </div>
+          <button type="submit" class="mt-4 bg-blue-600 text-white px-4 py-2 rounded-lg" disabled>
+            Save (Coming Soon)
+          </button>
+        </form>
+      </div>
+    </div>
+
+    <!-- Tab: Docs -->
+    <div id="tab-docs" class="tab-content hidden">
+      <div class="bg-white dark:bg-gray-800 rounded-lg shadow p-6 prose dark:prose-invert max-w-none">
+        <h3>Owner Panel Documentation</h3>
+        <p>Welcome to the LeadLeader Owner Panel. This interface provides system monitoring and control capabilities.</p>
+        
+        <h4>Tabs Overview:</h4>
+        <ul>
+          <li><strong>Overview:</strong> Real-time metrics including uptime, request counts, latency stats, and traffic patterns.</li>
+          <li><strong>Messages:</strong> View recent contact form submissions and transcription logs (coming soon).</li>
+          <li><strong>Settings:</strong> Runtime configuration overrides for features and rate limits (in development).</li>
+          <li><strong>Docs:</strong> This documentation page.</li>
+        </ul>
+
+        <h4>Security Notes:</h4>
+        <ul>
+          <li>Sessions expire after 7 days of inactivity.</li>
+          <li>Login attempts are rate-limited (3 bursts, 5/min).</li>
+          <li>All actions are logged to /tmp/metrics.jsonl.</li>
+        </ul>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+  // Tab switching
+  const tabBtns = document.querySelectorAll('.tab-btn');
+  const tabContents = document.querySelectorAll('.tab-content');
+  
+  tabBtns.forEach(btn => {
+    btn.addEventListener('click', () => {
+      const targetTab = btn.dataset.tab;
+      
+      // Update button states
+      tabBtns.forEach(b => b.classList.remove('active', 'border-blue-600', 'text-blue-600'));
+      tabBtns.forEach(b => b.classList.add('border-transparent', 'text-gray-500'));
+      btn.classList.add('active', 'border-blue-600', 'text-blue-600');
+      btn.classList.remove('border-transparent', 'text-gray-500');
+      
+      // Update content visibility
+      tabContents.forEach(content => content.classList.add('hidden'));
+      document.getElementById(`tab-${targetTab}`).classList.remove('hidden');
+    });
+  });
+  
+  // Set initial active state
+  tabBtns[0].classList.add('border-blue-600', 'text-blue-600');
+  tabBtns[0].classList.remove('border-transparent', 'text-gray-500');
+</script>

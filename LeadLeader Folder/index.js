@@ -1,412 +1,451 @@
-/**
- * index.js — LeadLeader Express Server
- * 
- * Handles Twilio Voice webhooks for a voice receptionist that:
- * - Greets callers with consent notice
- * - Gathers intent (demo|subscribe|appointment)
- * - Collects: name, phone, preferred time, optional plan
- * - Triggers non-blocking aftercall pipeline (Sheets/Email/Calendar)
- * - Minimal structured logging
- */
-
+// index.js
+// LeadLeader Demo - Whisper transcription + Amazon Polly TTS
 const express = require('express');
-const twilio = require('twilio');
-const fs = require('fs');
+const multer = require('multer');
+const { v4: uuidv4 } = require('uuid');
 const path = require('path');
-const { detectIntentFromText } = require('./router');
-const { config, safe } = require('./config/config');
-const voice = require('./utils/voice');
-const aftercall = require('./aftercall');
-const { google } = require('googleapis');
-const sgMail = require('@sendgrid/mail');
-
+const fs = require('fs');
+const { spawn } = require('child_process');
 const dayjs = require('dayjs');
 const utc = require('dayjs/plugin/utc');
 const timezone = require('dayjs/plugin/timezone');
+const sgMail = require('@sendgrid/mail');
+
+// Local modules
+const { config, safe } = require('./config/config.js');
+const ffmpeg = require('./utils/ffmpeg.js');
+const polly = require('./utils/polly.js');
+const sheets = require('./utils/sheets.js');
+
 dayjs.extend(utc);
 dayjs.extend(timezone);
 
+// Initialize SendGrid if configured
+if (config.SENDGRID_API_KEY) {
+  sgMail.setApiKey(config.SENDGRID_API_KEY);
+}
+
 const app = express();
 
-// Trust proxy for X-Forwarded-* headers (Fly.io)
-app.set('trust proxy', 1);
+// Middleware
+app.use(express.json({ limit: '10mb' }));
+app.use(express.urlencoded({ extended: true, limit: '10mb' }));
 
-// Body parsers with limits
-app.use(express.json({ limit: '1mb' }));
-app.use(express.urlencoded({ extended: true, limit: '1mb' }));
+// Ensure temp directories exist
+const RECORDINGS_DIR = '/tmp/recordings';
+const AUDIO_DIR = '/tmp/audio';
+[RECORDINGS_DIR, AUDIO_DIR].forEach(dir => {
+  if (!fs.existsSync(dir)) {
+    fs.mkdirSync(dir, { recursive: true });
+  }
+});
 
-// Serve static audio
-app.use('/audio', express.static(path.join(__dirname, 'audio')));
+// Serve generated audio files
+app.use('/audio', express.static(AUDIO_DIR));
 
-// --- Structured logging helper ---
+// Simple logger
 function log(level, route, data = {}) {
   const entry = {
-    timestamp: new Date().toISOString(),
     level,
     route,
-    tenant: config.TENANT_ID,
-    timezone: config.TENANT_TIMEZONE,
+    timestamp: new Date().toISOString(),
     ...data
   };
   console.log(JSON.stringify(entry));
 }
 
-// --- Twilio signature validation (optional) ---
-let signatureValidationWarned = false;
-function validateTwilioRequest(req) {
-  if (!config.VALIDATE_TWILIO_SIGNATURE) {
-    if (!signatureValidationWarned) {
-      log('warn', 'middleware', { message: 'Twilio signature validation disabled' });
-      signatureValidationWarned = true;
-    }
-    return true;
-  }
-  // TODO(sonnet): Implement full twilio.validateRequest() when enabled
-  return true;
-}
+// ============================================================================
+// ROUTES
+// ============================================================================
 
-// --- helpers ---
-function normalizeResult(result) {
-  // Supports old router (returns string) and new router (returns { text, intent })
-  if (typeof result === 'string') {
-    const text = result;
-    // Heuristic: treat any variant of "could you rephrase" as unknown
-    const isUnknown = text.toLowerCase().includes('could you rephrase');
-    return { text, intent: isUnknown ? 'unknown' : 'normal' };
-  }
-  // Already structured
-  const { text, intent } = result || {};
-  return { text: text || "Sorry, I didn't catch that. Could you rephrase?", intent: intent || 'unknown' };
-}
-
-function sayLine(vr, line) {
-  // keep simple text for now (SSML optional later)
-  vr.say({ voice: 'Polly.Joanna' }, line);
-}
-
-// --- health check ---
+// Root health check
 app.get('/', (req, res) => {
-  res.send('LeadLeader OK');
+  res.type('text/plain').send('LeadLeader OK');
 });
 
-// health endpoint required by docs
+// Detailed health check
 app.get('/_health', (req, res) => {
-  return res.json({ ok: true, uptime: process.uptime(), env: safe() });
-});
-
-// --- helpers ---
-function normalizeResult(result) {
-  // Supports old router (returns string) and new router (returns { text, intent })
-  if (typeof result === 'string') {
-    const text = result;
-    // Heuristic: treat any variant of "could you rephrase" as unknown
-    const isUnknown = text.toLowerCase().includes('could you rephrase');
-    return { text, intent: isUnknown ? 'unknown' : 'normal' };
-  }
-  // Already structured
-  const { text, intent } = result || {};
-  return { text: text || "Sorry, I didn't catch that. Could you rephrase?", intent: intent || 'unknown' };
-}
-
-function sayLine(vr, line) {
-  // keep simple text for now (SSML optional later)
-  vr.say({ voice: 'Polly.Joanna' }, line);
-}
-
-// --- health check ---
-app.get('/', (req, res) => {
-  res.send('✅ LeadLeader Voice Bot is running. Point your Twilio webhook to /voice');
-});
-
-// health endpoint required by docs
-app.get('/_health', (req, res) => {
-  return res.json({ ok: true, uptime: process.uptime(), env: safe() });
-});
-
-// helper to return TwiML with Play fallback to Say
-function playOrSay(twiml, key) {
-  const base = config.PUBLIC_BASE_URL ? config.PUBLIC_BASE_URL.replace(/\/$/, '') : '';
-  const snippet = voice.playVoiceTwiml(key, null, base);
-  // snippet is a twiml fragment (string) — return it as raw XML via TwiML's Response
-  return snippet;
-}
-
-// --- initial inbound call ---
-app.post('/voice', (req, res) => {
-  if (!validateTwilioRequest(req)) {
-    log('warn', '/voice', { message: 'Invalid Twilio signature', from: req.body.From });
-    return res.status(403).send('Forbidden');
-  }
-
-  const callSid = req.body.CallSid;
-  log('info', '/voice', { callSid, from: req.body.From });
-
-  const twiml = new twilio.twiml.VoiceResponse();
-
-  const gather = twiml.gather({
-    input: 'speech',
-    speechTimeout: 'auto',
-    action: '/handle?step=1',
-    method: 'POST'
+  const uptime = process.uptime();
+  res.json({
+    ok: true,
+    uptime,
+    env: safe()
   });
-
-  // Greeting
-  gather.say({ voice: 'Polly.Joanna' }, 'Hey there, this is LeadLeader.');
-
-  // Short consent notice (PHASE 2 requirement)
-  gather.say({ voice: 'Polly.Joanna' }, 'This call may be recorded. We only store transcripts, not raw audio. Continuing means you agree.');
-
-  // Fallback if no input
-  twiml.say({ voice: 'Polly.Joanna' }, 'Thanks for calling. Goodbye.');
-  twiml.hangup();
-
-  res.type('text/xml').send(twiml.toString());
 });
 
-// --- main step handler ---
-// Multi-step voice handler using query params to carry state between steps
-app.post('/handle', (req, res) => {
-  if (!validateTwilioRequest(req)) {
-    return res.status(403).send('Forbidden');
-  }
-
-  const step = Number(req.query.step || '1');
-  const prev = req.query || {};
-  const speech = req.body.SpeechResult || '';
-  const callSid = req.body.CallSid;
-  const twiml = new twilio.twiml.VoiceResponse();
-
-  // carry state via query params appended to action URLs
-  const state = {
-    intent: prev.intent || '',
-    caller_name: prev.caller_name || '',
-    callback_number: prev.callback_number || '',
-    preferred_time: prev.preferred_time || '',
-    plan_interest: prev.plan_interest || ''
-  };
-
-  // assign last speech to the last asked field
-  if (step > 1 && speech) {
-    if (!state.intent) state.intent = detectIntentFromText(speech) || state.intent;
-    else if (!state.caller_name) state.caller_name = speech;
-    else if (!state.callback_number) state.callback_number = speech;
-    else if (!state.preferred_time) state.preferred_time = speech;
-    else if (!state.plan_interest) state.plan_interest = speech;
-  }
-
-  function buildAction(nextStep, overrides = {}) {
-    const params = Object.assign({}, state, overrides);
-    const qs = Object.keys(params).map(k => `${encodeURIComponent(k)}=${encodeURIComponent(params[k]||'')}`).join('&');
-    return `/handle?step=${nextStep}&${qs}`;
-  }
-
-  log('info', '/handle', { callSid, step, speech: speech.substring(0, 50) });
-
-  // step prompts
-  if (step === 1) {
-    const gather = twiml.gather({ input: 'speech', speechTimeout: 'auto', action: buildAction(2), method: 'POST' });
-    gather.say({ voice: 'Polly.Joanna' }, 'Are you calling for a demo, subscription, or to set an appointment?');
-    return res.type('text/xml').send(twiml.toString());
-  }
-
-  if (step === 2) {
-    // we just received intent
-    state.intent = detectIntentFromText(speech) || state.intent || 'demo';
-    const gather = twiml.gather({ input: 'speech', speechTimeout: 'auto', action: buildAction(3), method: 'POST' });
-    gather.say({ voice: 'Polly.Joanna' }, 'Great. What is your name?');
-    return res.type('text/xml').send(twiml.toString());
-  }
-
-  if (step === 3) {
-    state.caller_name = speech || state.caller_name;
-    const gather = twiml.gather({ input: 'speech', speechTimeout: 'auto', action: buildAction(4), method: 'POST' });
-    gather.say({ voice: 'Polly.Joanna' }, 'What is the best number to reach you?');
-    return res.type('text/xml').send(twiml.toString());
-  }
-
-  if (step === 4) {
-    state.callback_number = speech || state.callback_number;
-    const gather = twiml.gather({ input: 'speech', speechTimeout: 'auto', action: buildAction(5), method: 'POST' });
-    gather.say({ voice: 'Polly.Joanna' }, 'When is a good time for a quick call?');
-    return res.type('text/xml').send(twiml.toString());
-  }
-
-  if (step === 5) {
-    state.preferred_time = speech || state.preferred_time;
-    // if subscribe, ask plan
-    if (state.intent && state.intent.toLowerCase().includes('sub')) {
-      const gather = twiml.gather({ input: 'speech', speechTimeout: 'auto', action: buildAction(6), method: 'POST' });
-      gather.say({ voice: 'Polly.Joanna' }, 'For subscription, are you thinking Basic or Custom?');
-      return res.type('text/xml').send(twiml.toString());
+// Demo page - browser UI for recording and uploading
+app.get('/demo', (req, res) => {
+  const html = `
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>LeadLeader Demo - Voice Transcription</title>
+  <style>
+    body {
+      font-family: system-ui, -apple-system, sans-serif;
+      max-width: 600px;
+      margin: 50px auto;
+      padding: 20px;
+      background: #f5f5f5;
     }
-    // else finish
-    // send to aftercall
-    const payload = {
-      intent: state.intent || 'demo',
-      caller_name: state.caller_name || 'Unknown',
-      callback_number: state.callback_number || '',
-      preferred_time: state.preferred_time || '',
-      plan_interest: '',
-      timestamp: new Date().toISOString(),
-      priority: state.intent && state.intent.toLowerCase().includes('sub')
-    };
-    // notify aftercall async (non-blocking)
-    aftercall.handleAfterCall(payload, config).catch(e => log('error', '/handle', { message: 'aftercall failed', error: e.message, callSid }));
-    twiml.say({ voice: 'Polly.Joanna' }, 'Perfect. You will receive a confirmation shortly. Goodbye.');
-    twiml.hangup();
-    return res.type('text/xml').send(twiml.toString());
-  }
-
-  if (step === 6) {
-    state.plan_interest = speech || state.plan_interest;
-    const payload = {
-      intent: state.intent || 'subscribe',
-      caller_name: state.caller_name || 'Unknown',
-      callback_number: state.callback_number || '',
-      preferred_time: state.preferred_time || '',
-      plan_interest: state.plan_interest || '',
-      timestamp: new Date().toISOString(),
-      priority: true,
-      callSid
-    };
-    aftercall.handleAfterCall(payload, config).catch(e => log('error', '/handle', { message: 'aftercall failed', error: e.message, callSid }));
-    twiml.say({ voice: 'Polly.Joanna' }, 'Thanks — we will follow up about your subscription. Goodbye.');
-    twiml.hangup();
-    return res.type('text/xml').send(twiml.toString());
-  }
-
-  // fallback
-  twiml.say({ voice: 'Polly.Joanna' }, 'Thanks for calling. Goodbye.');
-  twiml.hangup();
-  return res.type('text/xml').send(twiml.toString());
-});
-
-// --- clarification path (one retry, then end) ---
-app.post('/clarify', (req, res) => {
-  const twiml = new twilio.twiml.VoiceResponse();
-  twiml.say({ voice: 'Polly.Joanna' }, 'Thanks for calling LeadLeader. Goodbye.');
-  twiml.hangup();
-  res.type('text/xml').send(twiml.toString());
-});
-
-// --- cron: daily summary (triggered by external scheduler) ---
-app.get('/cron/daily', async (req, res) => {
-  const key = req.query.key;
-  const tenantId = req.query.tenant;
-
-  if (!key || !config.CRON_SECRET || key !== config.CRON_SECRET) {
-    return res.status(403).json({ ok: false, error: 'invalid or missing key' });
-  }
-
-  // load tenants
-  let tenants;
-  try {
-    tenants = JSON.parse(fs.readFileSync(path.join(__dirname, 'tenants.json'), 'utf8'));
-  } catch (e) {
-    console.error('Could not read tenants.json', e);
-    return res.status(500).json({ ok: false, error: 'could not load tenants' });
-  }
-
-  const tenant = (tenants.tenants || []).find(t => t.id === tenantId);
-  if (!tenant) return res.status(404).json({ ok: false, error: 'tenant not found' });
-
-  // Verify we have required Google Sheets config
-  if (!config.GOOGLE_SERVICE_ACCOUNT_JSON || !config.SHEETS_SPREADSHEET_ID) {
-    return res.status(500).json({ ok: false, error: 'missing Google Sheets configuration' });
-  }
-
-  try {
-    const sa = config.GOOGLE_SERVICE_ACCOUNT_JSON;
-    const jwt = new google.auth.JWT(sa.client_email, null, sa.private_key, [
-      'https://www.googleapis.com/auth/spreadsheets'
-    ]);
-    await jwt.authorize();
-    const sheets = google.sheets({ version: 'v4', auth: jwt });
-
-    // Read Calls sheet (assumes header row)
-    const callsRes = await sheets.spreadsheets.values.get({
-    spreadsheetId: config.SHEETS_SPREADSHEET_ID,
-      range: 'Calls'
-    });
-    const rows = callsRes.data.values || [];
-    if (rows.length <= 1) {
-      // no data rows
-      const dateStrEmpty = dayjs().tz(tenant.timezone).subtract(1, 'day').format('YYYY-MM-DD');
-      return res.json({ ok: true, tenant: tenant.id, date: dateStrEmpty, calls_total: 0, top_intent: null });
+    .container {
+      background: white;
+      padding: 30px;
+      border-radius: 8px;
+      box-shadow: 0 2px 10px rgba(0,0,0,0.1);
     }
+    h1 {
+      color: #333;
+      margin-top: 0;
+    }
+    button {
+      background: #007bff;
+      color: white;
+      border: none;
+      padding: 12px 24px;
+      border-radius: 4px;
+      cursor: pointer;
+      font-size: 16px;
+      margin: 5px;
+    }
+    button:hover {
+      background: #0056b3;
+    }
+    button:disabled {
+      background: #ccc;
+      cursor: not-allowed;
+    }
+    .recording {
+      background: #dc3545 !important;
+    }
+    .status {
+      margin: 20px 0;
+      padding: 10px;
+      border-radius: 4px;
+      background: #e9ecef;
+    }
+    .result {
+      margin: 20px 0;
+      padding: 15px;
+      background: #d4edda;
+      border-left: 4px solid #28a745;
+      border-radius: 4px;
+    }
+    .transcript {
+      background: #fff;
+      padding: 10px;
+      margin: 10px 0;
+      border-radius: 4px;
+      border: 1px solid #ddd;
+      font-family: 'Courier New', monospace;
+    }
+    audio {
+      width: 100%;
+      margin-top: 10px;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h1>🎙️ LeadLeader Demo</h1>
+    <p>Record a voice message, and we'll transcribe it using Whisper and generate a response with Amazon Polly.</p>
+    
+    <div>
+      <button id="startBtn">Start Recording</button>
+      <button id="stopBtn" disabled>Stop Recording</button>
+      <button id="uploadBtn" disabled>Upload & Transcribe</button>
+    </div>
+    
+    <div id="status" class="status">Ready to record</div>
+    <div id="result"></div>
+  </div>
 
-    const headers = rows[0].map(h => (h || '').toString().toLowerCase());
-    const tenantIdx = headers.indexOf('tenant') >= 0 ? headers.indexOf('tenant') : 0;
-    const tsIdx = headers.indexOf('timestamp') >= 0 ? headers.indexOf('timestamp') : 1;
-    const intentIdx = headers.indexOf('intent') >= 0 ? headers.indexOf('intent') : 2;
+  <script>
+    let mediaRecorder;
+    let audioChunks = [];
+    let audioBlob;
 
-    const yesterdayStart = dayjs().tz(tenant.timezone).subtract(1, 'day').startOf('day');
-    const yesterdayEnd = dayjs().tz(tenant.timezone).subtract(1, 'day').endOf('day');
+    const startBtn = document.getElementById('startBtn');
+    const stopBtn = document.getElementById('stopBtn');
+    const uploadBtn = document.getElementById('uploadBtn');
+    const status = document.getElementById('status');
+    const result = document.getElementById('result');
 
-    const dataRows = rows.slice(1);
-    const filtered = dataRows.filter(r => {
+    startBtn.addEventListener('click', async () => {
       try {
-        const rTenant = (r[tenantIdx] || '').toString();
-        if (rTenant !== tenant.id) return false;
-        const ts = r[tsIdx];
-        const parsed = dayjs(ts).tz(tenant.timezone);
-        if (!parsed.isValid()) return false;
-        return parsed.isAfter(yesterdayStart) && parsed.isBefore(yesterdayEnd);
-      } catch (e) {
-        return false;
+        const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+        mediaRecorder = new MediaRecorder(stream);
+        audioChunks = [];
+
+        mediaRecorder.ondataavailable = (e) => {
+          audioChunks.push(e.data);
+        };
+
+        mediaRecorder.onstop = () => {
+          audioBlob = new Blob(audioChunks, { type: 'audio/webm' });
+          status.textContent = 'Recording complete. Click Upload to transcribe.';
+          uploadBtn.disabled = false;
+        };
+
+        mediaRecorder.start();
+        startBtn.disabled = true;
+        startBtn.classList.add('recording');
+        stopBtn.disabled = false;
+        status.textContent = '🔴 Recording... Click Stop when done.';
+      } catch (err) {
+        status.textContent = 'Error: ' + err.message;
       }
     });
 
-    const calls_total = filtered.length;
-    const intentCounts = {};
-    filtered.forEach(r => {
-      const it = (r[intentIdx] || 'unknown').toString();
-      intentCounts[it] = (intentCounts[it] || 0) + 1;
-    });
-    const top_intent = Object.keys(intentCounts).sort((a, b) => intentCounts[b] - intentCounts[a])[0] || null;
-
-    // Append summary row to DailySummary
-    const dateStr = yesterdayStart.format('YYYY-MM-DD');
-    const appendValues = [[dateStr, tenant.id, String(calls_total), top_intent || 'none', new Date().toISOString()]];
-    await sheets.spreadsheets.values.append({
-  spreadsheetId: config.SHEETS_SPREADSHEET_ID,
-      range: 'DailySummary!A:E',
-      valueInputOption: 'USER_ENTERED',
-      requestBody: { values: appendValues }
+    stopBtn.addEventListener('click', () => {
+      if (mediaRecorder && mediaRecorder.state !== 'inactive') {
+        mediaRecorder.stop();
+        mediaRecorder.stream.getTracks().forEach(track => track.stop());
+        startBtn.disabled = false;
+        startBtn.classList.remove('recording');
+        stopBtn.disabled = true;
+      }
     });
 
-    // Send email summary if SendGrid is configured
-    if (config.SENDGRID_API_KEY && Array.isArray(tenant.recipients) && tenant.recipients.length > 0) {
-      sgMail.setApiKey(config.SENDGRID_API_KEY);
-      const subject = `Daily summary for ${tenant.name} (${dateStr})`;
-      const html = `<p>Calls total: <strong>${calls_total}</strong></p><p>Top intent: <strong>${top_intent || 'none'}</strong></p>`;
-      const msg = {
-        to: tenant.recipients,
-        from: tenant.recipients[0],
-        subject,
-        text: `Calls total: ${calls_total}\nTop intent: ${top_intent || 'none'}`,
-        html
-      };
+    uploadBtn.addEventListener('click', async () => {
+      if (!audioBlob) {
+        status.textContent = 'No recording available';
+        return;
+      }
+
+      uploadBtn.disabled = true;
+      status.textContent = '⏳ Uploading and transcribing...';
+      result.innerHTML = '';
+
       try {
-        await sgMail.send(msg);
+        const formData = new FormData();
+        formData.append('audio', audioBlob, 'recording.webm');
+
+        const response = await fetch('/upload', {
+          method: 'POST',
+          body: formData
+        });
+
+        const data = await response.json();
+
+        if (data.ok) {
+          let html = '<div class="result">';
+          html += '<h3>✅ Success!</h3>';
+          html += '<div class="transcript"><strong>Transcript:</strong><br>' + (data.transcript || 'No speech detected') + '</div>';
+          
+          if (data.ttsUrl) {
+            html += '<audio controls src="' + data.ttsUrl + '"></audio>';
+          }
+          
+          html += '</div>';
+          result.innerHTML = html;
+          status.textContent = 'Done! Record another or refresh the page.';
+        } else {
+          result.innerHTML = '<div class="result" style="background:#f8d7da;border-color:#dc3545;"><strong>Error:</strong> ' + (data.error || 'Unknown error') + '</div>';
+          status.textContent = 'Upload failed. Try again.';
+        }
+      } catch (err) {
+        result.innerHTML = '<div class="result" style="background:#f8d7da;border-color:#dc3545;"><strong>Error:</strong> ' + err.message + '</div>';
+        status.textContent = 'Upload failed. Try again.';
+      }
+
+      uploadBtn.disabled = false;
+      startBtn.disabled = false;
+    });
+  </script>
+</body>
+</html>
+  `;
+  
+  res.type('text/html').send(html);
+});
+
+// Upload and transcribe audio
+const upload = multer({ 
+  dest: RECORDINGS_DIR,
+  limits: { fileSize: 50 * 1024 * 1024 }
+});
+
+app.post('/upload', upload.single('audio'), async (req, res) => {
+  const traceId = uuidv4();
+  
+  try {
+    log('info', '/upload', { traceId, msg: 'Upload started' });
+
+    if (!req.file) {
+      return res.status(400).json({ ok: false, error: 'No audio file uploaded' });
+    }
+
+    const originalFile = req.file.filename;
+    const webmPath = req.file.path;
+    const uuid = uuidv4();
+    const wavPath = path.join(RECORDINGS_DIR, `${uuid}.wav`);
+
+    // Convert webm to wav for Whisper
+    log('info', '/upload', { traceId, msg: 'Converting to WAV' });
+    await ffmpeg.convertToWav(webmPath, wavPath);
+
+    // Get duration
+    let durationSec = 0;
+    try {
+      durationSec = await ffmpeg.getAudioDuration(wavPath);
+    } catch (e) {
+      log('warn', '/upload', { traceId, msg: 'Could not get duration', error: e.message });
+    }
+
+    // Transcribe with Whisper
+    let transcript = '';
+    let whisperResult = null;
+    
+    if (config.ENABLE_TRANSCRIBE) {
+      log('info', '/upload', { traceId, msg: 'Transcribing with Whisper' });
+      
+      try {
+        const scriptPath = path.join(__dirname, 'scripts', 'transcribe.py');
+        const pythonProcess = spawn('python3', [scriptPath, '--audio', wavPath, '--model', 'base.en']);
+        
+        let stdout = '';
+        let stderr = '';
+        
+        pythonProcess.stdout.on('data', (data) => {
+          stdout += data.toString();
+        });
+        
+        pythonProcess.stderr.on('data', (data) => {
+          stderr += data.toString();
+        });
+        
+        await new Promise((resolve, reject) => {
+          pythonProcess.on('close', (code) => {
+            if (code !== 0) {
+              reject(new Error(`Transcription failed with code ${code}: ${stderr}`));
+            } else {
+              resolve();
+            }
+          });
+        });
+        
+        whisperResult = JSON.parse(stdout);
+        transcript = whisperResult.text || '';
+        
+        log('info', '/upload', { traceId, msg: 'Transcription complete', length: transcript.length });
       } catch (e) {
-        console.error('SendGrid send error', e && e.response ? e.response.body : e);
+        log('error', '/upload', { traceId, msg: 'Transcription error', error: e.message });
+        transcript = '[Transcription failed]';
+      }
+    } else {
+      transcript = '[Transcription disabled]';
+    }
+
+    // Generate Polly TTS response
+    let ttsUrl = null;
+    
+    if (config.ENABLE_POLLY) {
+      try {
+        const ttsText = "Thanks, we received your message.";
+        const ttsPath = path.join(AUDIO_DIR, `${uuid}.mp3`);
+        
+        await polly.synthesizeToFile(ttsText, ttsPath, config);
+        ttsUrl = `${config.PUBLIC_BASE_URL || ''}/audio/${uuid}.mp3`;
+        
+        log('info', '/upload', { traceId, msg: 'TTS generated', url: ttsUrl });
+      } catch (e) {
+        log('error', '/upload', { traceId, msg: 'TTS error', error: e.message });
       }
     }
 
-    return res.json({ ok: true, tenant: tenant.id, date: dateStr, calls_total, top_intent });
-  } catch (err) {
-    console.error('cron/daily error', err);
-    return res.status(500).json({ ok: false, error: err.message || String(err) });
+    // Append to Google Sheets
+    if (config.SHEETS_SPREADSHEET_ID && config.GOOGLE_SERVICE_ACCOUNT_JSON) {
+      try {
+        const timestamp = dayjs().tz(config.TENANT_TIMEZONE).format('YYYY-MM-DD HH:mm:ss');
+        const storedPaths = `${wavPath}, ${ttsUrl || 'N/A'}`;
+        
+        await sheets.appendCallRecord({
+          timestamp,
+          tenantId: config.TENANT_ID,
+          source: 'demo',
+          durationSec,
+          origFile: originalFile,
+          storedPaths,
+          transcript
+        }, config);
+        
+        log('info', '/upload', { traceId, msg: 'Appended to Sheets' });
+      } catch (e) {
+        log('error', '/upload', { traceId, msg: 'Sheets error', error: e.message });
+      }
+    }
+
+    // Send email via SendGrid
+    if (config.SENDGRID_API_KEY && config.SENDGRID_FROM && config.RECIPIENTS.length > 0) {
+      try {
+        const timestamp = dayjs().tz(config.TENANT_TIMEZONE).format('YYYY-MM-DD HH:mm:ss');
+        
+        const emailData = {
+          to: config.RECIPIENTS,
+          from: config.SENDGRID_FROM,
+          subject: `LeadLeader Demo - New Transcription (${timestamp})`,
+          text: `New voice recording transcribed:\n\nTranscript:\n${transcript}\n\nDuration: ${durationSec}s\nAudio: ${ttsUrl || 'N/A'}\n\nTimestamp: ${timestamp}`,
+          html: `
+            <h2>New Voice Recording</h2>
+            <p><strong>Timestamp:</strong> ${timestamp}</p>
+            <p><strong>Duration:</strong> ${durationSec}s</p>
+            <h3>Transcript:</h3>
+            <div style="background:#f5f5f5;padding:15px;border-radius:4px;font-family:monospace;">
+              ${transcript}
+            </div>
+            ${ttsUrl ? `<p><a href="${ttsUrl}">Listen to Response</a></p>` : ''}
+          `
+        };
+        
+        await sgMail.send(emailData);
+        log('info', '/upload', { traceId, msg: 'Email sent' });
+      } catch (e) {
+        log('error', '/upload', { traceId, msg: 'Email error', error: e.message });
+      }
+    }
+
+    // Return response
+    res.json({
+      ok: true,
+      transcript,
+      ttsUrl,
+      durationSec,
+      traceId
+    });
+
+  } catch (error) {
+    log('error', '/upload', { traceId, msg: 'Upload failed', error: error.message });
+    res.status(500).json({ ok: false, error: error.message });
   }
 });
 
-// Port configuration: use centralized config
+// Cron endpoint (placeholder)
+app.get('/cron/daily', (req, res) => {
+  const secret = req.query.secret || req.headers['x-cron-secret'];
+  
+  if (config.CRON_SECRET && secret !== config.CRON_SECRET) {
+    return res.status(403).json({ ok: false, error: 'Invalid cron secret' });
+  }
+
+  log('info', '/cron/daily', { msg: 'Cron triggered (no-op)' });
+  
+  res.json({ 
+    ok: true, 
+    message: 'Cron executed (no-op)',
+    timestamp: new Date().toISOString()
+  });
+});
+
+// 404 handler
+app.use((req, res) => {
+  res.status(404).json({ ok: false, error: 'Not found' });
+});
+
+// Start server
 const PORT = config.PORT;
-
-app.listen(PORT, '0.0.0.0', () => {
-  console.log(`🚀 LeadLeader server running on port ${PORT}`);
+app.listen(PORT, () => {
+  log('info', 'server', { msg: `Server started on port ${PORT}`, env: config.NODE_ENV });
 });
-
-// (optional for tests)
-module.exports = app;

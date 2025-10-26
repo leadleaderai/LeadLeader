@@ -1,0 +1,62 @@
+<div class="min-h-screen bg-gray-50 dark:bg-gray-900 py-8">
+  <div class="container mx-auto px-4">
+    <!-- Header -->
+    <div class="mb-8">
+      <h1 class="text-3xl font-bold text-gray-900 dark:text-white mb-2">
+        Chat Demo
+      </h1>
+      <p class="text-gray-600 dark:text-gray-300">
+        Simple rule-based chatbot. Try asking about features, pricing, or help.
+      </p>
+    </div>
+
+    <!-- Chat Container -->
+    <div class="max-w-3xl mx-auto bg-white dark:bg-gray-800 rounded-lg shadow-lg">
+      <!-- Messages Area -->
+      <div 
+        id="messages" 
+        class="h-96 overflow-y-auto p-6 space-y-4 border-b border-gray-200 dark:border-gray-700"
+      >
+        <div class="text-gray-500 dark:text-gray-400 text-center text-sm">
+          Start chatting below!
+        </div>
+      </div>
+
+      <!-- Rate Limit Countdown -->
+      <div id="cooldownBanner" class="hidden bg-yellow-100 dark:bg-yellow-900 border-l-4 border-yellow-500 p-4">
+        <p class="text-sm text-yellow-800 dark:text-yellow-200">
+          ⏱️ Please wait <span id="cooldownSeconds" class="font-bold"></span> seconds before sending another message.
+        </p>
+      </div>
+
+      <!-- Input Area -->
+      <div class="p-6">
+        <form id="chatForm" class="flex gap-3">
+          <input 
+            type="text" 
+            id="messageInput" 
+            placeholder="Type your message..."
+            class="flex-1 px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 dark:bg-gray-700 dark:text-white"
+            required
+          />
+          <button 
+            type="submit" 
+            id="sendBtn"
+            class="bg-blue-600 hover:bg-blue-700 disabled:bg-gray-400 text-white px-6 py-2 rounded-lg font-semibold transition"
+          >
+            Send
+          </button>
+        </form>
+      </div>
+    </div>
+
+    <!-- Back Link -->
+    <div class="text-center mt-8">
+      <a href="/try" class="text-blue-600 dark:text-blue-400 hover:underline">
+        ← Back to Try Hub
+      </a>
+    </div>
+  </div>
+</div>
+
+<script src="/js/chat.js"></script>

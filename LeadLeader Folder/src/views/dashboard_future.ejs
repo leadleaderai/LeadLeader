@@ -1,0 +1,9 @@
+<%- include('partials/head', { title: title || 'Dashboard (Preview)' }) %>
+<h1>Dashboard (Preview)</h1>
+<p>This is a static preview of the future dashboard.</p>
+<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:12px">
+  <div class="card">Total Calls: <b>—</b></div>
+  <div class="card">Avg Duration: <b>—</b></div>
+  <div class="card">Emails Sent: <b>—</b></div>
+</div>
+<%- include('partials/foot') %>

@@ -1,0 +1,136 @@
+<div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-12">
+  <!-- Header -->
+  <div class="mb-8">
+    <h1 class="text-4xl font-bold text-gray-900 mb-2">
+      📘 API Documentation
+    </h1>
+    <p class="text-lg text-gray-600">
+      Complete reference for LeadLeader Platform APIs and configuration
+    </p>
+  </div>
+
+  <!-- Environment Configuration -->
+  <div class="bg-white rounded-lg shadow mb-8">
+    <div class="px-6 py-4 border-b border-gray-200">
+      <h2 class="text-xl font-semibold text-gray-900">Environment Configuration</h2>
+    </div>
+    <div class="px-6 py-4">
+      <div class="bg-gray-50 rounded-lg p-4 font-mono text-sm overflow-x-auto">
+        <% Object.entries(env).forEach(([key, value]) => { %>
+          <div class="mb-2">
+            <span class="text-blue-600"><%= key %></span>=<span class="text-gray-700"><%= value %></span>
+          </div>
+        <% }) %>
+      </div>
+    </div>
+  </div>
+
+  <!-- Routes Documentation -->
+  <div class="bg-white rounded-lg shadow mb-8">
+    <div class="px-6 py-4 border-b border-gray-200">
+      <h2 class="text-xl font-semibold text-gray-900">Available Routes</h2>
+    </div>
+    <div class="divide-y divide-gray-200">
+      <% routes.forEach(route => { %>
+        <div class="px-6 py-4">
+          <div class="flex items-start">
+            <span class="inline-flex items-center px-3 py-1 rounded-full text-xs font-medium <%= route.method === 'GET' ? 'bg-green-100 text-green-800' : 'bg-blue-100 text-blue-800' %> mr-3">
+              <%= route.method %>
+            </span>
+            <div class="flex-1">
+              <code class="text-sm font-mono text-gray-900"><%= route.path %></code>
+              <% if (route.description) { %>
+                <p class="mt-1 text-sm text-gray-600"><%= route.description %></p>
+              <% } %>
+            </div>
+          </div>
+        </div>
+      <% }) %>
+    </div>
+  </div>
+
+  <!-- API Examples -->
+  <div class="bg-white rounded-lg shadow mb-8">
+    <div class="px-6 py-4 border-b border-gray-200">
+      <h2 class="text-xl font-semibold text-gray-900">API Examples</h2>
+    </div>
+    <div class="px-6 py-6 space-y-6">
+      <!-- Upload Audio Example -->
+      <div>
+        <h3 class="text-lg font-medium text-gray-900 mb-2">Upload Audio for Transcription</h3>
+        <div class="bg-gray-900 rounded-lg p-4 overflow-x-auto">
+          <pre class="text-green-400 text-sm"><code>curl -X POST https://leadleader-ty-demo.fly.dev/upload \
+  -F "audio=@recording.webm" \
+  -H "Content-Type: multipart/form-data"</code></pre>
+        </div>
+        <p class="mt-2 text-sm text-gray-600">Returns JSON with transcript, duration, and AI response audio path.</p>
+      </div>
+
+      <!-- Health Check Example -->
+      <div>
+        <h3 class="text-lg font-medium text-gray-900 mb-2">Health Check</h3>
+        <div class="bg-gray-900 rounded-lg p-4 overflow-x-auto">
+          <pre class="text-green-400 text-sm"><code>curl https://leadleader-ty-demo.fly.dev/_health</code></pre>
+        </div>
+        <p class="mt-2 text-sm text-gray-600">Returns system status, uptime, and feature flags.</p>
+      </div>
+
+      <!-- Contact Form Example -->
+      <div>
+        <h3 class="text-lg font-medium text-gray-900 mb-2">Submit Contact Form</h3>
+        <div class="bg-gray-900 rounded-lg p-4 overflow-x-auto">
+          <pre class="text-green-400 text-sm"><code>curl -X POST https://leadleader-ty-demo.fly.dev/api/contact \
+  -H "Content-Type: application/json" \
+  -d '{
+    "name": "John Doe",
+    "email": "john@example.com",
+    "message": "I am interested in your platform"
+  }'</code></pre>
+        </div>
+        <p class="mt-2 text-sm text-gray-600">Sends contact form submission via email.</p>
+      </div>
+    </div>
+  </div>
+
+  <!-- Response Schemas -->
+  <div class="bg-white rounded-lg shadow">
+    <div class="px-6 py-4 border-b border-gray-200">
+      <h2 class="text-xl font-semibold text-gray-900">Response Schemas</h2>
+    </div>
+    <div class="px-6 py-6 space-y-6">
+      <div>
+        <h3 class="text-lg font-medium text-gray-900 mb-2">Upload Response</h3>
+        <div class="bg-gray-50 rounded-lg p-4 font-mono text-sm overflow-x-auto">
+          <pre>{
+  "ok": true,
+  "traceId": "1234567890-abc123",
+  "transcript": "Hello, this is a test recording",
+  "duration": 5.2,
+  "pollyAudioPath": "/audio/response-123.mp3",
+  "pollyText": "Thank you for your message",
+  "timestamp": "2025-10-26T06:00:00.000Z"
+}</pre>
+        </div>
+      </div>
+
+      <div>
+        <h3 class="text-lg font-medium text-gray-900 mb-2">Health Check Response</h3>
+        <div class="bg-gray-50 rounded-lg p-4 font-mono text-sm overflow-x-auto">
+          <pre>{
+  "ok": true,
+  "uptime": 12345.67,
+  "env": {
+    "NODE_ENV": "production",
+    "PORT": 8080,
+    "TENANT_ID": "demo",
+    "FEATURES": {
+      "transcribe": true,
+      "polly": true
+    }
+  }
+}</pre>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
