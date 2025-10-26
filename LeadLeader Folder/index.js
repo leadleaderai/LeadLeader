@@ -1,5 +1,15 @@
+/**
+ * index.js — LeadLeader Express Server
+ * 
+ * Handles Twilio Voice webhooks for a voice receptionist that:
+ * - Greets callers with consent notice
+ * - Gathers intent (demo|subscribe|appointment)
+ * - Collects: name, phone, preferred time, optional plan
+ * - Triggers non-blocking aftercall pipeline (Sheets/Email/Calendar)
+ * - Minimal structured logging
+ */
+
 const express = require('express');
-// use built-in express parsers
 const twilio = require('twilio');
 const fs = require('fs');
 const path = require('path');
@@ -17,12 +27,72 @@ dayjs.extend(utc);
 dayjs.extend(timezone);
 
 const app = express();
-app.set('trust proxy', true);
-app.use(express.urlencoded({ extended: false }));
-app.use(express.json());
+
+// Trust proxy for X-Forwarded-* headers (Fly.io)
+app.set('trust proxy', 1);
+
+// Body parsers with limits
+app.use(express.json({ limit: '1mb' }));
+app.use(express.urlencoded({ extended: true, limit: '1mb' }));
 
 // Serve static audio
 app.use('/audio', express.static(path.join(__dirname, 'audio')));
+
+// --- Structured logging helper ---
+function log(level, route, data = {}) {
+  const entry = {
+    timestamp: new Date().toISOString(),
+    level,
+    route,
+    tenant: config.TENANT_ID,
+    timezone: config.TENANT_TIMEZONE,
+    ...data
+  };
+  console.log(JSON.stringify(entry));
+}
+
+// --- Twilio signature validation (optional) ---
+let signatureValidationWarned = false;
+function validateTwilioRequest(req) {
+  if (!config.VALIDATE_TWILIO_SIGNATURE) {
+    if (!signatureValidationWarned) {
+      log('warn', 'middleware', { message: 'Twilio signature validation disabled' });
+      signatureValidationWarned = true;
+    }
+    return true;
+  }
+  // TODO(sonnet): Implement full twilio.validateRequest() when enabled
+  return true;
+}
+
+// --- helpers ---
+function normalizeResult(result) {
+  // Supports old router (returns string) and new router (returns { text, intent })
+  if (typeof result === 'string') {
+    const text = result;
+    // Heuristic: treat any variant of "could you rephrase" as unknown
+    const isUnknown = text.toLowerCase().includes('could you rephrase');
+    return { text, intent: isUnknown ? 'unknown' : 'normal' };
+  }
+  // Already structured
+  const { text, intent } = result || {};
+  return { text: text || 'Sorry, I didn't catch that. Could you rephrase?', intent: intent || 'unknown' };
+}
+
+function sayLine(vr, line) {
+  // keep simple text for now (SSML optional later)
+  vr.say({ voice: 'Polly.Joanna' }, line);
+}
+
+// --- health check ---
+app.get('/', (req, res) => {
+  res.send('LeadLeader OK');
+});
+
+// health endpoint required by docs
+app.get('/_health', (req, res) => {
+  return res.json({ ok: true, uptime: process.uptime(), env: safe() });
+});
 
 // --- helpers ---
 function normalizeResult(result) {
@@ -63,6 +133,14 @@ function playOrSay(twiml, key) {
 
 // --- initial inbound call ---
 app.post('/voice', (req, res) => {
+  if (!validateTwilioRequest(req)) {
+    log('warn', '/voice', { message: 'Invalid Twilio signature', from: req.body.From });
+    return res.status(403).send('Forbidden');
+  }
+
+  const callSid = req.body.CallSid;
+  log('info', '/voice', { callSid, from: req.body.From });
+
   const twiml = new twilio.twiml.VoiceResponse();
 
   const gather = twiml.gather({
@@ -72,24 +150,30 @@ app.post('/voice', (req, res) => {
     method: 'POST'
   });
 
-  // greeting (play or say)
-  const play = voice.playVoiceTwiml('greeting', 'Hey there, this is LeadLeader.', config.PUBLIC_BASE_URL);
-  if (play && play.playUrl) {
-    gather.play(play.playUrl);
-  } else {
-    gather.say({ voice: 'Polly.Joanna' }, 'Hey there, this is LeadLeader.');
-  }
+  // Greeting
+  gather.say({ voice: 'Polly.Joanna' }, 'Hey there, this is LeadLeader.');
 
-  // fallback: say goodbye if no input
+  // Short consent notice (PHASE 2 requirement)
+  gather.say({ voice: 'Polly.Joanna' }, 'This call may be recorded. We only store transcripts, not raw audio. Continuing means you agree.');
+
+  // Fallback if no input
+  twiml.say({ voice: 'Polly.Joanna' }, 'Thanks for calling. Goodbye.');
+  twiml.hangup();
+
   res.type('text/xml').send(twiml.toString());
 });
 
 // --- main step handler ---
 // Multi-step voice handler using query params to carry state between steps
 app.post('/handle', (req, res) => {
+  if (!validateTwilioRequest(req)) {
+    return res.status(403).send('Forbidden');
+  }
+
   const step = Number(req.query.step || '1');
   const prev = req.query || {};
   const speech = req.body.SpeechResult || '';
+  const callSid = req.body.CallSid;
   const twiml = new twilio.twiml.VoiceResponse();
 
   // carry state via query params appended to action URLs
@@ -115,6 +199,8 @@ app.post('/handle', (req, res) => {
     const qs = Object.keys(params).map(k => `${encodeURIComponent(k)}=${encodeURIComponent(params[k]||'')}`).join('&');
     return `/handle?step=${nextStep}&${qs}`;
   }
+
+  log('info', '/handle', { callSid, step, speech: speech.substring(0, 50) });
 
   // step prompts
   if (step === 1) {
@@ -165,7 +251,7 @@ app.post('/handle', (req, res) => {
       priority: state.intent && state.intent.toLowerCase().includes('sub')
     };
     // notify aftercall async (non-blocking)
-    aftercall.handleAfterCall(payload, config).catch(e => console.error('aftercall error', e));
+    aftercall.handleAfterCall(payload, config).catch(e => log('error', '/handle', { message: 'aftercall failed', error: e.message, callSid }));
     twiml.say({ voice: 'Polly.Joanna' }, 'Perfect. You will receive a confirmation shortly. Goodbye.');
     twiml.hangup();
     return res.type('text/xml').send(twiml.toString());
@@ -180,9 +266,10 @@ app.post('/handle', (req, res) => {
       preferred_time: state.preferred_time || '',
       plan_interest: state.plan_interest || '',
       timestamp: new Date().toISOString(),
-      priority: true
+      priority: true,
+      callSid
     };
-    aftercall.handleAfterCall(payload, config).catch(e => console.error('aftercall error', e));
+    aftercall.handleAfterCall(payload, config).catch(e => log('error', '/handle', { message: 'aftercall failed', error: e.message, callSid }));
     twiml.say({ voice: 'Polly.Joanna' }, 'Thanks — we will follow up about your subscription. Goodbye.');
     twiml.hangup();
     return res.type('text/xml').send(twiml.toString());
