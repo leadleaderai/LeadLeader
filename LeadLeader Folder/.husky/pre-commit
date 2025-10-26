@@ -1,0 +1,24 @@
+#!/bin/sh
+. "$(dirname "$0")/_/husky.sh"
+
+# Pre-commit hook: block committing obvious secrets or .env files
+echo "🔒 Running pre-commit secret scan..."
+
+# 1) block files by name
+staged_files=$(git diff --cached --name-only --diff-filter=ACM)
+echo "$staged_files" | grep -E "(^|/)\.env($|/)|(^|/)\.env\..*|credentials.*\.json" >/dev/null 2>&1
+if [ $? -eq 0 ]; then
+  echo "ERROR: Attempt to commit .env or credentials file. Remove secrets before committing." >&2
+  exit 1
+fi
+
+# 2) scan staged diffs for secret patterns
+git diff --cached --no-color | grep -E -i "sk-[A-Za-z0-9_-]{20,}|AKIA[0-9A-Z]{16}|secret[_-]?key|-----BEGIN (RSA|EC|PRIVATE) KEY-----|TWILIO_AUTH_TOKEN\s*=\s*.+|SENDGRID_API_KEY\s*=\s*.+" >/dev/null 2>&1
+if [ $? -eq 0 ]; then
+  echo "ERROR: Potential secret detected in staged changes. Aborting commit." >&2
+  git diff --cached --no-color | grep -E -i "sk-[A-Za-z0-9_-]{20,}|AKIA[0-9A-Z]{16}|secret[_-]?key|-----BEGIN (RSA|EC|PRIVATE) KEY-----|TWILIO_AUTH_TOKEN\s*=\s*.+|SENDGRID_API_KEY\s*=\s*.+" >&2
+  exit 1
+fi
+
+echo "No obvious secrets found. Proceeding with commit."
+exit 0

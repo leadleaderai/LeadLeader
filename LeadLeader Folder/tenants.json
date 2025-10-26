@@ -1,16 +1,11 @@
 {
+  "_comment": "Demo data only — replace with tenant store in production",
   "tenants": [
     {
-      "id": "leadleader-demo",
-      "name": "Lead-Leader Demo",
+      "id": "demo",
       "timezone": "America/Los_Angeles",
-      "recipients": ["leadleader.ai@gmail.com"],
-      "open_hours": "always",
-      "consent_variant": "short",
-      "numbers": {
-        "twilio_incoming": "+1XXXXXXXXXX",
-        "caller_id_outbound": "+1YYYYYYYYYY"
-      }
+      "recipients": ["you@example.com"],
+      "allowedFromNumbers": ["+15551234567"]
     }
   ]
 }

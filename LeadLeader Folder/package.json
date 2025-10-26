@@ -4,16 +4,21 @@
   "description": "LeadLeader voice receptionist (Twilio + Express) with modular dialogue and clean routing.",
   "main": "index.js",
   "scripts": {
-    "start": "node index.js"
+    "start": "node index.js",
+    "prepare": "echo 'skip husky prepare in bootstrap'",
+    "bootstrap": "node scripts/dev-bootstrap.js",
+    "smoke": "node scripts/smoke.js"
   },
   "license": "ISC",
   "dependencies": {
-  "@sendgrid/mail": "*",
-    "body-parser": "^2.2.0",
+    "@sendgrid/mail": "*",
     "dayjs": "^1.11.9",
     "dotenv": "^16.4.5",
     "express": "^5.1.0",
     "googleapis": "^121.0.0",
     "twilio": "^5.10.3"
+  },
+  "devDependencies": {
+    "husky": "^8.0.0"
   }
 }

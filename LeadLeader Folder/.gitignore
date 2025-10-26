@@ -1,0 +1,10 @@
+.env
+.env.*
+*.pem
+node_modules/
+logs/
+npm-debug.log*
+.DS_Store
+tmp/
+/.husky/_/
+/*.log

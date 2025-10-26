@@ -1,36 +1,27 @@
-require('dotenv').config();
 const express = require('express');
-const bodyParser = require('body-parser');
+// use built-in express parsers
 const twilio = require('twilio');
-const { getResponse } = require('./router');
+const fs = require('fs');
+const path = require('path');
+const { detectIntentFromText } = require('./router');
+const { config, safe } = require('./config/config');
+const voice = require('./utils/voice');
+const aftercall = require('./aftercall');
 const { google } = require('googleapis');
 const sgMail = require('@sendgrid/mail');
+
 const dayjs = require('dayjs');
 const utc = require('dayjs/plugin/utc');
 const timezone = require('dayjs/plugin/timezone');
-const fs = require('fs');
-const path = require('path');
-
 dayjs.extend(utc);
 dayjs.extend(timezone);
 
-// optional: if you want SSML later, we can wrap lines with this
-// const { addNaturalPacing } = require('./utils/ssml');
-
 const app = express();
-const PORT = process.env.PORT || 3000;
+app.set('trust proxy', true);
+app.use(express.urlencoded({ extended: false }));
+app.use(express.json());
 
-// Basic CORS headers (lightweight, avoids extra dependency)
-app.use((req, res, next) => {
-  res.header('Access-Control-Allow-Origin', '*');
-  res.header('Access-Control-Allow-Headers', 'Origin, X-Requested-With, Content-Type, Accept');
-  next();
-});
-
-app.use(bodyParser.urlencoded({ extended: false }));
-app.use(bodyParser.json());
-
-// serve audio files
+// Serve static audio
 app.use('/audio', express.static(path.join(__dirname, 'audio')));
 
 // --- helpers ---
@@ -57,6 +48,19 @@ app.get('/', (req, res) => {
   res.send('✅ LeadLeader Voice Bot is running. Point your Twilio webhook to /voice');
 });
 
+// health endpoint required by docs
+app.get('/_health', (req, res) => {
+  return res.json({ ok: true, uptime: process.uptime(), env: safe() });
+});
+
+// helper to return TwiML with Play fallback to Say
+function playOrSay(twiml, key) {
+  const base = config.PUBLIC_BASE_URL ? config.PUBLIC_BASE_URL.replace(/\/$/, '') : '';
+  const snippet = voice.playVoiceTwiml(key, null, base);
+  // snippet is a twiml fragment (string) — return it as raw XML via TwiML's Response
+  return snippet;
+}
+
 // --- initial inbound call ---
 app.post('/voice', (req, res) => {
   const twiml = new twilio.twiml.VoiceResponse();
@@ -64,81 +68,137 @@ app.post('/voice', (req, res) => {
   const gather = twiml.gather({
     input: 'speech',
     speechTimeout: 'auto',
-    action: '/handle',
+    action: '/handle?step=1',
     method: 'POST'
   });
 
-  // greeting — play hosted greeting audio
-  // (audio files are served from /audio)
-  gather.play('/audio/greeting.mp3');
+  // greeting (play or say)
+  const play = voice.playVoiceTwiml('greeting', 'Hey there, this is LeadLeader.', config.PUBLIC_BASE_URL);
+  if (play && play.playUrl) {
+    gather.play(play.playUrl);
+  } else {
+    gather.say({ voice: 'Polly.Joanna' }, 'Hey there, this is LeadLeader.');
+  }
 
-  // if no input captured
-  sayLine(twiml, "Sorry, I didn’t catch that. Please call back.");
-
+  // fallback: say goodbye if no input
   res.type('text/xml').send(twiml.toString());
 });
 
 // --- main step handler ---
+// Multi-step voice handler using query params to carry state between steps
 app.post('/handle', (req, res) => {
-  const speechResult = req.body.SpeechResult || '';
-  console.log('SpeechResult:', speechResult);
-
-  const { text, intent } = normalizeResult(getResponse(speechResult));
+  const step = Number(req.query.step || '1');
+  const prev = req.query || {};
+  const speech = req.body.SpeechResult || '';
   const twiml = new twilio.twiml.VoiceResponse();
 
-  if (intent === 'unknown') {
-    // clarify once
-    const gather = twiml.gather({
-      input: 'speech',
-      speechTimeout: 'auto',
-      action: '/clarify',
-      method: 'POST'
-    });
-    sayLine(gather, text);
+  // carry state via query params appended to action URLs
+  const state = {
+    intent: prev.intent || '',
+    caller_name: prev.caller_name || '',
+    callback_number: prev.callback_number || '',
+    preferred_time: prev.preferred_time || '',
+    plan_interest: prev.plan_interest || ''
+  };
+
+  // assign last speech to the last asked field
+  if (step > 1 && speech) {
+    if (!state.intent) state.intent = detectIntentFromText(speech) || state.intent;
+    else if (!state.caller_name) state.caller_name = speech;
+    else if (!state.callback_number) state.callback_number = speech;
+    else if (!state.preferred_time) state.preferred_time = speech;
+    else if (!state.plan_interest) state.plan_interest = speech;
+  }
+
+  function buildAction(nextStep, overrides = {}) {
+    const params = Object.assign({}, state, overrides);
+    const qs = Object.keys(params).map(k => `${encodeURIComponent(k)}=${encodeURIComponent(params[k]||'')}`).join('&');
+    return `/handle?step=${nextStep}&${qs}`;
+  }
+
+  // step prompts
+  if (step === 1) {
+    const gather = twiml.gather({ input: 'speech', speechTimeout: 'auto', action: buildAction(2), method: 'POST' });
+    gather.say({ voice: 'Polly.Joanna' }, 'Are you calling for a demo, subscription, or to set an appointment?');
     return res.type('text/xml').send(twiml.toString());
   }
 
-  if (intent === 'finalize') {
-    sayLine(twiml, text);
-    sayLine(twiml, "Thanks for calling LeadLeader. Goodbye.");
+  if (step === 2) {
+    // we just received intent
+    state.intent = detectIntentFromText(speech) || state.intent || 'demo';
+    const gather = twiml.gather({ input: 'speech', speechTimeout: 'auto', action: buildAction(3), method: 'POST' });
+    gather.say({ voice: 'Polly.Joanna' }, 'Great. What is your name?');
+    return res.type('text/xml').send(twiml.toString());
+  }
+
+  if (step === 3) {
+    state.caller_name = speech || state.caller_name;
+    const gather = twiml.gather({ input: 'speech', speechTimeout: 'auto', action: buildAction(4), method: 'POST' });
+    gather.say({ voice: 'Polly.Joanna' }, 'What is the best number to reach you?');
+    return res.type('text/xml').send(twiml.toString());
+  }
+
+  if (step === 4) {
+    state.callback_number = speech || state.callback_number;
+    const gather = twiml.gather({ input: 'speech', speechTimeout: 'auto', action: buildAction(5), method: 'POST' });
+    gather.say({ voice: 'Polly.Joanna' }, 'When is a good time for a quick call?');
+    return res.type('text/xml').send(twiml.toString());
+  }
+
+  if (step === 5) {
+    state.preferred_time = speech || state.preferred_time;
+    // if subscribe, ask plan
+    if (state.intent && state.intent.toLowerCase().includes('sub')) {
+      const gather = twiml.gather({ input: 'speech', speechTimeout: 'auto', action: buildAction(6), method: 'POST' });
+      gather.say({ voice: 'Polly.Joanna' }, 'For subscription, are you thinking Basic or Custom?');
+      return res.type('text/xml').send(twiml.toString());
+    }
+    // else finish
+    // send to aftercall
+    const payload = {
+      intent: state.intent || 'demo',
+      caller_name: state.caller_name || 'Unknown',
+      callback_number: state.callback_number || '',
+      preferred_time: state.preferred_time || '',
+      plan_interest: '',
+      timestamp: new Date().toISOString(),
+      priority: state.intent && state.intent.toLowerCase().includes('sub')
+    };
+    // notify aftercall async (non-blocking)
+    aftercall.handleAfterCall(payload, config).catch(e => console.error('aftercall error', e));
+    twiml.say({ voice: 'Polly.Joanna' }, 'Perfect. You will receive a confirmation shortly. Goodbye.');
     twiml.hangup();
     return res.type('text/xml').send(twiml.toString());
   }
 
-  // normal branch → respond and keep listening once more
-  const gather = twiml.gather({
-    input: 'speech',
-    speechTimeout: 'auto',
-    action: '/handle',
-    method: 'POST'
-  });
-  sayLine(gather, text);
+  if (step === 6) {
+    state.plan_interest = speech || state.plan_interest;
+    const payload = {
+      intent: state.intent || 'subscribe',
+      caller_name: state.caller_name || 'Unknown',
+      callback_number: state.callback_number || '',
+      preferred_time: state.preferred_time || '',
+      plan_interest: state.plan_interest || '',
+      timestamp: new Date().toISOString(),
+      priority: true
+    };
+    aftercall.handleAfterCall(payload, config).catch(e => console.error('aftercall error', e));
+    twiml.say({ voice: 'Polly.Joanna' }, 'Thanks — we will follow up about your subscription. Goodbye.');
+    twiml.hangup();
+    return res.type('text/xml').send(twiml.toString());
+  }
 
+  // fallback
+  twiml.say({ voice: 'Polly.Joanna' }, 'Thanks for calling. Goodbye.');
+  twiml.hangup();
   return res.type('text/xml').send(twiml.toString());
 });
 
 // --- clarification path (one retry, then end) ---
 app.post('/clarify', (req, res) => {
-  const speechResult = req.body.SpeechResult || '';
-  console.log('Clarify SpeechResult:', speechResult);
-
-  const { text, intent } = normalizeResult(getResponse(speechResult));
   const twiml = new twilio.twiml.VoiceResponse();
-
-  if (intent === 'unknown') {
-    sayLine(twiml, "Thanks for calling LeadLeader. Goodbye.");
-    twiml.hangup();
-  } else if (intent === 'finalize') {
-    sayLine(twiml, text);
-    sayLine(twiml, "Thanks for calling LeadLeader. Goodbye.");
-    twiml.hangup();
-  } else {
-    // clarified to a known branch → answer and end (no loops)
-    sayLine(twiml, text);
-    sayLine(twiml, "Thanks for calling LeadLeader. Goodbye.");
-    twiml.hangup();
-  }
-
+  twiml.say({ voice: 'Polly.Joanna' }, 'Thanks for calling LeadLeader. Goodbye.');
+  twiml.hangup();
   res.type('text/xml').send(twiml.toString());
 });
 
@@ -147,7 +207,7 @@ app.get('/cron/daily', async (req, res) => {
   const key = req.query.key;
   const tenantId = req.query.tenant;
 
-  if (!key || !process.env.CRON_SECRET || key !== process.env.CRON_SECRET) {
+  if (!key || !config.CRON_SECRET || key !== config.CRON_SECRET) {
     return res.status(403).json({ ok: false, error: 'invalid or missing key' });
   }
 
@@ -164,12 +224,12 @@ app.get('/cron/daily', async (req, res) => {
   if (!tenant) return res.status(404).json({ ok: false, error: 'tenant not found' });
 
   // Verify we have required Google Sheets config
-  if (!process.env.GOOGLE_SERVICE_ACCOUNT_JSON || !process.env.SHEETS_SPREADSHEET_ID) {
+  if (!config.GOOGLE_SERVICE_ACCOUNT_JSON || !config.SHEETS_SPREADSHEET_ID) {
     return res.status(500).json({ ok: false, error: 'missing Google Sheets configuration' });
   }
 
   try {
-    const sa = JSON.parse(process.env.GOOGLE_SERVICE_ACCOUNT_JSON);
+    const sa = config.GOOGLE_SERVICE_ACCOUNT_JSON;
     const jwt = new google.auth.JWT(sa.client_email, null, sa.private_key, [
       'https://www.googleapis.com/auth/spreadsheets'
     ]);
@@ -178,7 +238,7 @@ app.get('/cron/daily', async (req, res) => {
 
     // Read Calls sheet (assumes header row)
     const callsRes = await sheets.spreadsheets.values.get({
-      spreadsheetId: process.env.SHEETS_SPREADSHEET_ID,
+    spreadsheetId: config.SHEETS_SPREADSHEET_ID,
       range: 'Calls'
     });
     const rows = callsRes.data.values || [];
@@ -222,15 +282,15 @@ app.get('/cron/daily', async (req, res) => {
     const dateStr = yesterdayStart.format('YYYY-MM-DD');
     const appendValues = [[dateStr, tenant.id, String(calls_total), top_intent || 'none', new Date().toISOString()]];
     await sheets.spreadsheets.values.append({
-      spreadsheetId: process.env.SHEETS_SPREADSHEET_ID,
+  spreadsheetId: config.SHEETS_SPREADSHEET_ID,
       range: 'DailySummary!A:E',
       valueInputOption: 'USER_ENTERED',
       requestBody: { values: appendValues }
     });
 
     // Send email summary if SendGrid is configured
-    if (process.env.SENDGRID_API_KEY && Array.isArray(tenant.recipients) && tenant.recipients.length > 0) {
-      sgMail.setApiKey(process.env.SENDGRID_API_KEY);
+    if (config.SENDGRID_API_KEY && Array.isArray(tenant.recipients) && tenant.recipients.length > 0) {
+      sgMail.setApiKey(config.SENDGRID_API_KEY);
       const subject = `Daily summary for ${tenant.name} (${dateStr})`;
       const html = `<p>Calls total: <strong>${calls_total}</strong></p><p>Top intent: <strong>${top_intent || 'none'}</strong></p>`;
       const msg = {
@@ -253,6 +313,9 @@ app.get('/cron/daily', async (req, res) => {
     return res.status(500).json({ ok: false, error: err.message || String(err) });
   }
 });
+
+// Port configuration: prefer environment, then config, then default
+const PORT = process.env.PORT || config.PORT || 8080;
 
 app.listen(PORT, '0.0.0.0', () => {
   console.log(`🚀 LeadLeader server running on port ${PORT}`);
