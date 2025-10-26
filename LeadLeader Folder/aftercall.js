@@ -1,3 +1,15 @@
+/**
+ * aftercall.js — Post-call background processing pipeline
+ * 
+ * Non-blocking worker that runs after a call completes:
+ * - saveToSheets: Append row to Google Sheets (Calls tab)
+ * - sendEmailSummary: Send HTML summary via SendGrid
+ * - createCalendarEvent: Create 30m meeting in Google Calendar
+ * 
+ * Uses Promise.allSettled to ensure partial failures don't block other actions.
+ * Guarded integrations: skips actions if config missing (logs warning).
+ */
+
 const { google } = require('googleapis');
 const sgMail = require('@sendgrid/mail');
 const dayjs = require('dayjs');
