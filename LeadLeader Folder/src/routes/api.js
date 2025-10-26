@@ -169,7 +169,7 @@ router.post('/upload', upload.single('audio'), async (req, res) => {
 
 // ───────────────────────────────────────────────
 // ROUTE: POST /api/contact - Contact form submission
-// ACTION: Send email via SendGrid
+// ACTION: Send email via SendGrid with template system
 // ───────────────────────────────────────────────
 router.post('/api/contact', abuse.limitContact, express.json(), async (req, res) => {
   const traceId = generateTraceId();
@@ -183,21 +183,30 @@ router.post('/api/contact', abuse.limitContact, express.json(), async (req, res)
     from: email
   }));
 
-  // Honeypot check
+  // Honeypot check (silent fail)
   if (website) {
     abuse.recordError('contact_honeypot_triggered');
-    return res.status(400).json({
-      ok: false,
-      error: 'Invalid submission'
+    log('contact', { ok: false, reason: 'honeypot', ip: req.ip });
+    // Return success to avoid revealing honeypot
+    return res.json({
+      ok: true,
+      message: 'Contact form submitted successfully'
     });
   }
 
   // hCaptcha verification (if configured)
-  if (config.HCAPTCHA_SECRET) {
+  if (config.HCAPTCHA_SECRET && config.REQUIRE_HCAPTCHA_SIGNUP) {
+    if (!hcaptchaToken) {
+      return res.status(400).json({
+        ok: false,
+        error: 'Please complete the captcha'
+      });
+    }
     const ip = req.ip || req.connection.remoteAddress;
     const verified = await abuse.verifyHCaptcha(hcaptchaToken, ip);
     if (!verified) {
       abuse.recordError('contact_hcaptcha_failed');
+      log('contact', { ok: false, reason: 'hcaptcha_failed', ip: req.ip });
       return res.status(400).json({
         ok: false,
         error: 'Captcha verification failed'
@@ -221,14 +230,29 @@ router.post('/api/contact', abuse.limitContact, express.json(), async (req, res)
   }
 
   try {
-    // Send email to admin recipients
-    if (config.RECIPIENTS && config.SENDGRID_API_KEY) {
-      await sendContactFormEmail({ name, email, message }, config.RECIPIENTS);
+    // Parse RECIPIENTS (comma-separated)
+    const recipients = config.RECIPIENTS.filter(Boolean);
+    if (!recipients.length) {
+      console.warn('[api/contact] No recipients configured');
+      log('contact', { ok: false, error: 'no_recipients', from: email, ip: req.ip });
+      return res.status(500).json({
+        ok: false,
+        error: 'Email service not configured'
+      });
+    }
+
+    // Send email to admin recipients using templates
+    if (config.SENDGRID_API_KEY && config.SENDGRID_FROM) {
+      await sendContactFormEmail({ name, email, message }, recipients);
       abuse.incCounter('emailsSentOk');
-      log('contact', { ok: true, from: email, ip: req.ip });
+      log('contact', { ok: true, from: email, to_count: recipients.length, ip: req.ip });
     } else {
       console.warn('[api/contact] SendGrid not configured, skipping email');
       log('contact', { ok: false, error: 'sendgrid_not_configured', from: email, ip: req.ip });
+      return res.status(500).json({
+        ok: false,
+        error: 'Email service not configured'
+      });
     }
 
     console.log(JSON.stringify({ level: 'info', route: '/api/contact', traceId, event: 'contact_email_sent' }));
@@ -245,8 +269,7 @@ router.post('/api/contact', abuse.limitContact, express.json(), async (req, res)
     
     res.status(500).json({
       ok: false,
-      error: 'Failed to send contact form',
-      details: err.message
+      error: 'Failed to send contact form'
     });
   }
 });

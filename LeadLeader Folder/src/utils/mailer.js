@@ -5,6 +5,7 @@
 
 const sgMail = require('@sendgrid/mail');
 const config = require('./config');
+const emailTpl = require('./emailTpl');
 
 // Initialize SendGrid (lazy)
 let initialized = false;
@@ -102,7 +103,7 @@ LeadLeader Platform
 }
 
 /**
- * Send contact form submission email
+ * Send contact form submission email using templates
  * 
  * @param {object} data - Contact form data
  * @param {string} data.name - Sender name
@@ -113,31 +114,10 @@ LeadLeader Platform
  */
 async function sendContactFormEmail({ name, email, message }, recipients) {
   const subject = `[LeadLeader] Contact Form - ${name}`;
-  const text = `
-New contact form submission:
-
-Name: ${name}
-Email: ${email}
-
-Message:
-${message}
-
----
-Reply to: ${email}
-  `.trim();
-
-  const html = `
-<div style="font-family: system-ui, sans-serif; max-width: 600px; margin: 0 auto;">
-  <h2 style="color: #007bff;">New Contact Form Submission</h2>
-  <p><strong>Name:</strong> ${name}</p>
-  <p><strong>Email:</strong> <a href="mailto:${email}">${email}</a></p>
-  <hr style="border: 1px solid #e5e5e5; margin: 20px 0;">
-  <h3>Message:</h3>
-  <p style="background: #f5f5f5; padding: 15px; border-radius: 5px; white-space: pre-wrap;">${message}</p>
-  <hr style="border: 1px solid #e5e5e5; margin: 20px 0;">
-  <p style="color: #666; font-size: 12px;">LeadLeader Platform</p>
-</div>
-  `.trim();
+  
+  // Use templates for both HTML and text
+  const text = emailTpl.render('contact', 'txt', { name, email, message });
+  const html = emailTpl.render('contact', 'html', { name, email, message });
 
   await sendEmail({
     to: recipients,

@@ -39,6 +39,9 @@ const systemSimpleRoutes = require('./routes/system_simple');
 // ───────────────────────────────────────────────
 const app = express();
 
+// Trust proxy for accurate IP detection (required for Fly.io and rate limiting)
+app.set('trust proxy', 1);
+
 // ───────────────────────────────────────────────
 // Security middleware (helmet)
 // ───────────────────────────────────────────────
@@ -57,6 +60,7 @@ app.use(session({
   cookie: {
     httpOnly: true,
     secure: config.NODE_ENV === 'production',
+    sameSite: 'lax',
     maxAge: 7 * 24 * 60 * 60 * 1000 // 7 days
   }
 }));
