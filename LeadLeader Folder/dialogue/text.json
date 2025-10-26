@@ -1,9 +1,10 @@
 {
-  "greeting": "Hey there, this is LeadLeader. This call’s recorded for quality.",
-  "ask_intent": "Are you calling for a quick demo, to start a subscription, or to set an appointment?",
-  "ask_name": "What’s your name?",
-  "ask_phone": "What’s the best number to reach you on?",
-  "ask_time": "When’s a good time for a quick call?",
-  "ask_plan": "Got it. For subscription setup — are you thinking Basic or something more custom?",
-  "wrap": "Perfect. You’ll get a confirmation email and a calendar reminder shortly. Thanks for calling LeadLeader."
+  "greeting": "Hey there, this is LeadLeader.",
+  "consent_short": "This call may be recorded. We only store transcripts, not raw audio. Continuing means you agree.",
+  "ask_intent": "Are you calling for a demo, subscription, or to set an appointment?",
+  "ask_name": "Great. What is your name?",
+  "ask_phone": "What is the best number to reach you?",
+  "ask_time": "When is a good time for a quick call?",
+  "ask_plan": "For subscription, are you thinking Basic or Custom?",
+  "thanks": "Perfect. You will receive a confirmation shortly. Goodbye."
 }

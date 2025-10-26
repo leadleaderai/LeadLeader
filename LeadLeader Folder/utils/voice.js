@@ -1,3 +1,10 @@
+/**
+ * utils/voice.js — TwiML voice helpers
+ * 
+ * Builds TwiML fragments with Play (if audio exists) fallback to Say.
+ * Respects PUBLIC_BASE_URL; if missing, skips Play and uses Say only.
+ */
+
 const fs = require('fs');
 const path = require('path');
 
@@ -22,16 +29,18 @@ function fileExistsSync(relPath) {
   }
 }
 
-// playVoiceTwiml: returns an object { playUrl } or null
-// The calling code can decide how to render TwiML (<Play> or <Say>)
+// playVoiceTwiml: returns { playUrl } if audio exists and baseUrl provided, else null
+// Caller should fall back to <Say> with fallbackText
 function playVoiceTwiml(id, fallbackText, baseUrl) {
+  if (!baseUrl) return null; // no PUBLIC_BASE_URL → skip Play
   const file = voiceMap[id];
   if (!file) return null;
   if (fileExistsSync(file)) {
-    const url = baseUrl ? `${baseUrl.replace(/\/$/, '')}/audio/${file}` : `/audio/${file}`;
+    const url = `${baseUrl.replace(/\/$/, '')}/audio/${file}`;
     return { playUrl: url };
   }
   return null;
 }
 
 module.exports = { playVoiceTwiml, fileExistsSync };
+

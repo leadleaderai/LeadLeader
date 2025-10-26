@@ -1,9 +1,10 @@
 {
   "greeting": "greeting.mp3",
+  "consent_short": "consent_short.mp3",
   "ask_intent": "ask_intent.mp3",
   "ask_name": "ask_name.mp3",
   "ask_phone": "ask_phone.mp3",
   "ask_time": "ask_time.mp3",
   "ask_plan": "ask_plan.mp3",
-  "wrap": "wrap.mp3"
+  "thanks": "thanks.mp3"
 }
