@@ -76,7 +76,7 @@ function normalizeResult(result) {
   }
   // Already structured
   const { text, intent } = result || {};
-  return { text: text || 'Sorry, I didn't catch that. Could you rephrase?', intent: intent || 'unknown' };
+  return { text: text || "Sorry, I didn't catch that. Could you rephrase?", intent: intent || 'unknown' };
 }
 
 function sayLine(vr, line) {
@@ -105,7 +105,7 @@ function normalizeResult(result) {
   }
   // Already structured
   const { text, intent } = result || {};
-  return { text: text || 'Sorry, I didn’t catch that. Could you rephrase?', intent: intent || 'unknown' };
+  return { text: text || "Sorry, I didn't catch that. Could you rephrase?", intent: intent || 'unknown' };
 }
 
 function sayLine(vr, line) {
