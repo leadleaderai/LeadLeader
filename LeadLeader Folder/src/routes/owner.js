@@ -1,5 +1,5 @@
 const express = require('express'); const bcrypt = require('bcryptjs'); const fs = require('fs'); const path = require('path');
-const { listAll, setRole, renameUser, resetPassword, deleteUser, setPlan, getPlan } = require('../utils/usersStore');
+const { listAll, setRole, renameUser, resetPassword, deleteUser, setPlan, getPlan, getByUsername } = require('../utils/usersStore');
 const { sendMessage } = require('../utils/store/messagesStore');
 const { tail } = require('../utils/logger');
 const { limiterByKey } = require('../utils/limiters');
@@ -13,7 +13,32 @@ router.post('/users/rename', requireOwner, async (req,res)=>{ try{ const {oldNam
 router.post('/users/reset', requireOwner, async (req,res)=>{ try{ const {username,newPassword}=req.body||{}; if(username===OWNER_USERNAME) return res.status(400).json({ok:false,error:'Cannot reset owner'}); if(!newPassword||newPassword.length<8) return res.status(400).json({ok:false,error:'Bad password'}); const passHash=bcrypt.hashSync(newPassword,10); const out=await resetPassword(username,passHash); res.json({ok:true,user:out}) }catch(e){res.status(500).json({ok:false,error:e.message||'Failed reset'})}});
 router.post('/users/delete', requireOwner, async (req,res)=>{ try{ const {username}=req.body||{}; if(username===OWNER_USERNAME) return res.status(400).json({ok:false,error:'Cannot delete owner'}); const out=await deleteUser(username); res.json({ok:true,user:out}) }catch(e){res.status(e.code==='E_NOTFOUND'?404:500).json({ok:false,error:e.message||'Failed to delete user'})}});
 router.post('/users/plan', requireOwner, async (req,res)=>{ try{ const {username,plan}=req.body||{}; if(username===OWNER_USERNAME) return res.status(400).json({ok:false,error:'Cannot modify owner'}); if(!['free','pro','biz'].includes(plan)) return res.status(400).json({ok:false,error:'Bad plan'}); const out=await setPlan(username,plan); res.json({ok:true,user:out}) }catch(e){res.status(500).json({ok:false,error:e.message||'Failed plan update'})}});
-router.post('/dm', requireOwner, limiterByKey('owner-dm:ip'), async (req,res)=>{ try{ const {toUserId,body}=req.body||{}; if(!toUserId||!body) return res.status(400).json({ok:false,error:'Missing toUserId or body'}); const msg=await sendMessage({fromUserId:null,toUserId,body,createdAt:new Date().toISOString()}); res.json({ok:true,message:msg}) }catch(e){res.status(500).json({ok:false,error:e.message||'Failed to send DM'})}});
+router.post('/dm', requireOwner, limiterByKey('owner-dm:ip'), async (req,res)=>{ 
+  try{ 
+    let {toUserId, toUsername, body} = req.body || {}; 
+    
+    // Resolve toUserId from toUsername if needed
+    if (!toUserId && toUsername) {
+      const user = await getByUsername(toUsername);
+      if (user) toUserId = user.id;
+    }
+    
+    if (!toUserId || !body) {
+      return res.status(400).json({ok:false, error:'Missing toUserId/toUsername or body'});
+    }
+    
+    const msg = await sendMessage({
+      fromUserId: null,
+      toUserId,
+      body,
+      createdAt: new Date().toISOString()
+    }); 
+    
+    res.json({ok:true, message:msg});
+  } catch(e) {
+    res.status(500).json({ok:false, error:e.message||'Failed to send DM'});
+  }
+});
 router.get('/logs', requireOwner, limiterByKey('owner-logs:ip'), async (req,res)=>{ 
   try{ 
     const offset = Math.max(0, parseInt(req.query.offset) || 0);

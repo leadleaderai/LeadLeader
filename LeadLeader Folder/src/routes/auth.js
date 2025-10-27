@@ -11,55 +11,51 @@ const REQUIRE_HCAPTCHA_SIGNUP = String(process.env.REQUIRE_HCAPTCHA_SIGNUP || 'f
 const HCAPTCHA_SECRET = process.env.HCAPTCHA_SECRET || '';
 const HCAPTCHA_SITEKEY = process.env.HCAPTCHA_SITEKEY || '';
 const vU = u=>/^[a-z0-9_]{3,32}$/i.test(String(u||'')); const vP=p=>{const s=String(p||''); return s.length>=8 && s.length<=128}
-const setSession=(req,u,r)=>{req.session.user={username:u,role:r}}
+const setSession=(req,u,r,id)=>{req.session.user={username:u,role:r,id}}
 const requireAuth=(req,res,next)=>req.session?.user?next():res.status(302).redirect('/auth/login');
 
 router.get('/auth/login',(req,res)=>res.render('login',{title:'Log in'}));
 
 router.post('/auth/login', limiterByKey('login:ip'), async (req,res)=>{
   try{
-    const {username,password}=req.body||{};
-    const inUser = (username||'').trim();
-    const inPass = (password||'').trim();
+    const inUser = String(req.body.username || '').trim();
+    const inPass = String(req.body.password || '').trim();
     
-    if(!inUser || inUser.length < 3 || inUser.length > 32) {
-      return res.status(400).json({ok:false,error:'Username must be 3-32 characters'});
-    }
-    if(!inPass || inPass.length < 8 || inPass.length > 128) {
-      return res.status(400).json({ok:false,error:'Password must be 8-128 characters'});
+    // Login validation: presence only
+    if(!inUser || !inPass) {
+      return res.status(400).json({ok:false,error:'Please enter username and password.'});
     }
     
-    const ownerUser = (OWNER_USERNAME||'').trim();
-    const ownerPass = (OWNER_PASSWORD||'').trim();
+    const want = inUser.toLowerCase();
     
-    // Case-insensitive owner check
-    if(inUser.toLowerCase() === ownerUser.toLowerCase()){
-      if(!ownerPass) return res.status(403).json({ok:false,error:'Owner account not configured'});
-      if(inPass !== ownerPass) {
-        log('auth_login', { ok: false, username: inUser, role: 'owner', ip: req.ip });
-        return res.status(401).json({ok:false,error:'Invalid credentials'});
+    // Owner path
+    if(OWNER_USERNAME && OWNER_PASSWORD) {
+      if(want === String(OWNER_USERNAME).toLowerCase() && inPass === String(OWNER_PASSWORD)) {
+        setSession(req, OWNER_USERNAME, 'owner', null);
+        log('auth_login', { ok: true, who: 'owner', ip: req.ip });
+        return res.json({ok:true,role:'owner',redirect:'/owner/users'});
       }
-      setSession(req, ownerUser, 'owner');
-      log('auth_login', { ok: true, username: ownerUser, role: 'owner', ip: req.ip });
-      return res.json({ok:true,role:'owner',redirect:'/owner/users'});
     }
     
+    // Regular users
     await initStore();
-    const user=await getByUsername(inUser);
-    if(!user) {
-      log('auth_login', { ok: false, username: inUser, ip: req.ip });
-      return res.status(401).json({ok:false,error:'Invalid credentials'});
+    const user = await getByUsername(want);
+    if(!user || !user.passHash) {
+      log('auth_login', { ok: false, who: want, ip: req.ip, reason: 'bad_creds' });
+      return res.status(401).json({ok:false,error:'Invalid username or password.'});
     }
-    const ok=bcrypt.compareSync(inPass,user.passHash||'');
+    
+    const ok = bcrypt.compareSync(inPass, user.passHash);
     if(!ok) {
-      log('auth_login', { ok: false, username: inUser, ip: req.ip });
-      return res.status(401).json({ok:false,error:'Invalid credentials'});
+      log('auth_login', { ok: false, who: want, ip: req.ip, reason: 'bad_creds' });
+      return res.status(401).json({ok:false,error:'Invalid username or password.'});
     }
-    setSession(req, user.username, user.role||'user');
-    log('auth_login', { ok: true, username: user.username, role: user.role||'user', ip: req.ip });
+    
+    setSession(req, user.username, user.role||'user', user.id);
+    log('auth_login', { ok: true, who: user.username, ip: req.ip });
     res.json({ok:true,role:user.role||'user',redirect:'/dashboard'});
   }catch(e){
-    log('auth_login', { ok: false, error: e.message, ip: req.ip });
+    log('auth_login', { ok: false, ip: req.ip, reason: 'exception', message: e?.message });
     res.status(500).json({ok:false,error:'Login failed. Please try again.'})
   }
 });
@@ -94,7 +90,7 @@ router.post('/auth/signup', limiterByKey('signup:ip'), async (req,res)=>{
     await initStore(); 
     const passHash=bcrypt.hashSync(inPass,10);
     const created=await createUser({username:inUser,passHash,role:'user'});
-    setSession(req, created.username, 'user');
+    setSession(req, created.username, 'user', created.id);
     log('auth_signup', { ok: true, username: created.username, ip: req.ip });
     res.json({ok:true,redirect:'/dashboard'});
   }catch(e){ 
@@ -108,5 +104,4 @@ router.post('/auth/signup', limiterByKey('signup:ip'), async (req,res)=>{
 });
 
 router.post('/auth/logout',(req,res)=>{ if(req.session) req.session.destroy(()=>{}); res.redirect('/') });
-router.get('/dashboard', requireAuth, (req,res)=>res.render('dashboard_future',{title:'Dashboard (Preview)'}));
 module.exports = router;

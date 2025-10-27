@@ -13,18 +13,19 @@ const requireAuth = (req, res, next) => req.session?.user ? next() : res.status(
 // ───────────────────────────────────────────────
 router.get('/inbox', requireAuth, async (req, res) => {
   try {
+    const limit = Math.max(1, Math.min(200, parseInt(req.query.limit || '50', 10)));
+    const offset = Math.max(0, parseInt(req.query.offset || '0', 10));
     const userId = req.session.user.id;
-    const offset = Math.max(0, parseInt(req.query.offset) || 0);
-    const limit = 50;
-    
-    const messages = await listMessagesFor(userId, { limit, offset });
+
+    const { items, nextOffset } = await listMessagesFor(userId, { limit, offset });
+    const messages = items || [];
     const unreadCount = messages.filter(m => !m.read).length;
-    const nextOffset = messages.length === limit ? offset + limit : null;
     
     res.render('inbox', {
       title: `Inbox${unreadCount > 0 ? ` (${unreadCount})` : ''}`,
       messages,
-      nextOffset,
+      nextOffset: typeof nextOffset === 'number' ? nextOffset : null,
+      limit,
       unreadCount
     });
   } catch (err) {

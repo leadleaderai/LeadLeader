@@ -5,12 +5,12 @@
   <form id="loginForm" method="post" action="/auth/login" style="display:flex;flex-direction:column;gap:16px">
     <div>
       <label style="display:block;margin-bottom:6px;font-weight:500">Username</label>
-      <input name="username" required minlength="3" maxlength="32" pattern="[A-Za-z0-9_]+" 
+      <input name="username" required 
              style="width:100%;padding:10px;border:1px solid var(--input-border);border-radius:6px">
     </div>
     <div>
       <label style="display:block;margin-bottom:6px;font-weight:500">Password</label>
-      <input type="password" name="password" required minlength="8" maxlength="128"
+      <input type="password" name="password" required
              style="width:100%;padding:10px;border:1px solid var(--input-border);border-radius:6px">
     </div>
     <button type="submit" style="padding:12px;border-radius:6px;font-weight:600;cursor:pointer">

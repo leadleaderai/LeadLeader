@@ -11,9 +11,9 @@
 </head><body>
 <header style="display:flex;gap:14px;align-items:center;justify-content:space-between;padding:12px 16px;border-bottom:1px solid var(--border-color)">
   <nav style="display:flex;gap:12px;align-items:center">
-    <a href="/">Home</a><a href="/try">Try</a><a href="/system">System</a>
+    <a href="/">Home</a><a href="/try">Try</a><a href="/contact">Contact</a>
     <% if (typeof user !== 'undefined' && user && user.role === 'owner') { %>
-      <a href="/owner/users">Users</a><a href="/owner/logs">Logs</a>
+      <a href="/system">System</a><a href="/owner/users">Users</a><a href="/owner/logs">Logs</a>
     <% } %>
   </nav>
   <div style="display:flex;gap:12px;align-items:center">

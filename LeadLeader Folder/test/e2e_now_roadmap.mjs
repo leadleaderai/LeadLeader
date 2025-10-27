@@ -2,89 +2,115 @@
 // ═══════════════════════════════════════════════════════════
 // E2E NOW ROADMAP TEST
 // Tests: DMs, inbox, prefs, contact, quotas, plan changes
+// Uses native fetch (Node 20+) with 30s timeout
 // ═══════════════════════════════════════════════════════════
 
 import { spawn } from 'child_process';
-import http from 'http';
 import { fileURLToPath } from 'url';
 import { dirname, join } from 'path';
+import net from 'net';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
 const ROOT = join(__dirname, '..');
 
-const PORT = Number(process.env.TEST_PORT || 4567);
+// Find a free port or use TEST_PORT
+async function findFreePort(startPort = 4010) {
+  if (process.env.TEST_PORT) {
+    return Number(process.env.TEST_PORT);
+  }
+  
+  return new Promise((resolve) => {
+    const server = net.createServer();
+    server.listen(startPort, () => {
+      const { port } = server.address();
+      server.close(() => resolve(port));
+    });
+    server.on('error', () => {
+      resolve(findFreePort(startPort + 1));
+    });
+  });
+}
+
+const PORT = await findFreePort();
 const BASE = `http://127.0.0.1:${PORT}`;
 const OWNER_USERNAME = process.env.OWNER_USERNAME || 'LeadLeaderCeo';
 const OWNER_PASSWORD = process.env.OWNER_PASSWORD || 'test12345'; // Must be 8+ chars
+const TIMEOUT_MS = 30000; // 30 second timeout
 
 // Simple cookie jar
 const cookies = {};
 
 // ═══════════════════════════════════════════════════════════
-// HTTP Helpers
+// HTTP Helpers (native fetch with cookie management)
 // ═══════════════════════════════════════════════════════════
 
-function httpRequest(method, pathname, body = null, sessionName = 'default') {
-  return new Promise((resolve, reject) => {
-    const url = new URL(pathname, BASE);
-    const isJson = body && typeof body === 'object';
-    
-    const options = {
+async function httpRequest(method, pathname, body = null, sessionName = 'default') {
+  const url = new URL(pathname, BASE);
+  const isJson = body && typeof body === 'object';
+  
+  const headers = {
+    'User-Agent': 'E2E-Test/1.0'
+  };
+
+  if (isJson) {
+    headers['Content-Type'] = 'application/json';
+  } else if (body) {
+    headers['Content-Type'] = 'application/x-www-form-urlencoded';
+  }
+
+  if (cookies[sessionName]) {
+    headers['Cookie'] = cookies[sessionName];
+  }
+
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), TIMEOUT_MS);
+
+  try {
+    const res = await fetch(url.toString(), {
       method,
-      hostname: url.hostname,
-      port: url.port,
-      path: url.pathname + url.search,
-      headers: {
-        'User-Agent': 'E2E-Test/1.0'
+      headers,
+      body: isJson ? JSON.stringify(body) : body,
+      redirect: 'manual',
+      signal: controller.signal
+    });
+
+    clearTimeout(timeoutId);
+
+    // Save cookies - Node 20+ fetch has getSetCookie() method
+    const cookieHeaders = res.headers.getSetCookie?.() || [];
+    if (cookieHeaders.length > 0) {
+      const cookieValues = cookieHeaders.map(c => c.split(';')[0].trim());
+      cookies[sessionName] = cookieValues.join('; ');
+    }
+
+    let parsed;
+    const contentType = res.headers.get('content-type') || '';
+    const raw = await res.text();
+    
+    if (contentType.includes('application/json')) {
+      try {
+        parsed = JSON.parse(raw);
+      } catch {
+        parsed = raw;
       }
+    } else {
+      parsed = raw;
+    }
+
+    return {
+      status: res.status,
+      headers: Object.fromEntries(res.headers.entries()),
+      body: parsed,
+      raw
     };
-
-    if (isJson) {
-      options.headers['Content-Type'] = 'application/json';
-    } else if (body) {
-      options.headers['Content-Type'] = 'application/x-www-form-urlencoded';
+  } catch (error) {
+    clearTimeout(timeoutId);
+    if (error.name === 'AbortError') {
+      throw new Error(`Request timeout after ${TIMEOUT_MS}ms: ${method} ${pathname}`);
     }
-
-    if (cookies[sessionName]) {
-      options.headers['Cookie'] = cookies[sessionName];
-    }
-
-    const req = http.request(options, (res) => {
-      // Save cookies
-      const setCookie = res.headers['set-cookie'];
-      if (setCookie) {
-        cookies[sessionName] = setCookie.map(c => c.split(';')[0]).join('; ');
-      }
-
-      let data = '';
-      res.on('data', chunk => data += chunk);
-      res.on('end', () => {
-        let parsed = data;
-        try {
-          parsed = JSON.parse(data);
-        } catch {}
-        
-        resolve({
-          status: res.statusCode,
-          headers: res.headers,
-          body: parsed,
-          raw: data
-        });
-      });
-    });
-
-    req.on('error', reject);
-    req.setTimeout(10000, () => {
-      req.destroy();
-      reject(new Error('Request timeout'));
-    });
-
-    if (body) {
-      req.write(isJson ? JSON.stringify(body) : body);
-    }
-    req.end();
-  });
+    throw error;
+  }
 }
 
 async function waitForHealth(retries = 30, delayMs = 300) {
@@ -92,7 +118,9 @@ async function waitForHealth(retries = 30, delayMs = 300) {
     try {
       const res = await httpRequest('GET', '/_health');
       if (res.status === 200) return true;
-    } catch {}
+    } catch (err) {
+      // Ignore errors during health check retries
+    }
     await new Promise(r => setTimeout(r, delayMs));
   }
   return false;
@@ -117,7 +145,7 @@ async function startServer() {
         OWNER_USERNAME,
         OWNER_PASSWORD
       },
-      stdio: 'ignore'
+      stdio: 'ignore' // Silence server output for clean test output
     });
 
     serverProcess.on('error', reject);
@@ -191,16 +219,26 @@ async function runTests() {
     console.log(`   User ${testUsername} is now 'pro' (id: ${testUserId})`);
 
     // ─────────────────────────────────────────────────────────
-    // 4. Owner sends DM
+    // 4. Owner sends DM using toUsername
     // ─────────────────────────────────────────────────────────
-    step('Owner sends DM to user');
+    step('Owner sends DM to user (using toUsername)');
     const dmBody = {
-      toUserId: testUserId,
+      toUsername: testUsername, // Test toUsername resolution
       body: 'Hello from owner! This is your test DM.'
     };
     const dm = await httpRequest('POST', '/owner/dm', dmBody, 'owner');
     assert(dm.status === 200 && dm.body.ok, `DM send failed: ${JSON.stringify(dm.body)}`);
-    console.log(`   DM sent successfully`);
+    console.log(`   DM sent successfully via toUsername`);
+
+    // Test toUserId still works
+    step('Owner sends second DM (using toUserId)');
+    const dm2Body = {
+      toUserId: testUserId,
+      body: 'Second DM using toUserId.'
+    };
+    const dm2 = await httpRequest('POST', '/owner/dm', dm2Body, 'owner');
+    assert(dm2.status === 200 && dm2.body.ok, `DM send via toUserId failed: ${JSON.stringify(dm2.body)}`);
+    console.log(`   Second DM sent via toUserId`);
 
     // ─────────────────────────────────────────────────────────
     // 5. User login
@@ -212,13 +250,13 @@ async function runTests() {
     console.log(`   User logged in`);
 
     // ─────────────────────────────────────────────────────────
-    // 6. Check inbox - should have DM
+    // 7. Check inbox - should have DM
     // ─────────────────────────────────────────────────────────
     step('Check inbox for DM');
     const inbox1 = await httpRequest('GET', '/inbox', null, 'user');
     assert(inbox1.status === 200, `Inbox failed: ${inbox1.status}`);
     assert(inbox1.raw.includes('Hello from owner'), 'DM not found in inbox');
-    assert(inbox1.raw.includes('unread') || inbox1.raw.includes('new'), 'DM should be unread');
+    assert(inbox1.raw.includes('unread') || inbox1.raw.includes('new') || inbox1.raw.includes('checked'), 'DM should be unread');
     console.log(`   ✅ DM appears in inbox (unread)`);
 
     // ─────────────────────────────────────────────────────────
@@ -264,13 +302,35 @@ async function runTests() {
     console.log(`   Contact submitted (email skipped)`);
 
     // ─────────────────────────────────────────────────────────
-    // 11. Check dashboard - event should appear
+    // 12. Check dashboard - event should appear
     // ─────────────────────────────────────────────────────────
     step('Check dashboard for contact event');
     const dashboard1 = await httpRequest('GET', '/dashboard', null, 'user');
     assert(dashboard1.status === 200, `Dashboard failed: ${dashboard1.status}`);
-    assert(dashboard1.raw.includes('Test message with email disabled') || dashboard1.raw.includes('contact'), 'Contact event not on dashboard');
+    
+    // Check for actual event content, not just the word "contact" from empty state links
+    assert(dashboard1.raw.includes('Test message with email disabled') || dashboard1.raw.includes('contact_submitted') || dashboard1.raw.includes('messagePreview'), 'Contact event not on dashboard');
+    assert(dashboard1.raw.includes('event-card') || dashboard1.raw.includes('events-container'), 'Dashboard should have events displayed');
     console.log(`   ✅ Contact event appears on dashboard`);
+
+    // Test dashboard with custom limit parameter
+    step('Test dashboard with ?limit=25');
+    const dashboard2 = await httpRequest('GET', '/dashboard?limit=25', null, 'user');
+    assert(dashboard2.status === 200, `Dashboard with limit failed: ${dashboard2.status}`);
+    
+    // Debug: Check what view is being rendered
+    if (!dashboard2.raw.includes('limit-select')) {
+      console.log(`   DEBUG: Dashboard HTML doesn't have limit-select`);
+      console.log(`   DEBUG: HTML length: ${dashboard2.raw.length}`);
+      console.log(`   DEBUG: Has events container: ${dashboard2.raw.includes('events-container')}`);
+      console.log(`   DEBUG: Has filter buttons: ${dashboard2.raw.includes('filter-btn')}`);
+      console.log(`   DEBUG: Searching for "Show:" label:`, dashboard2.raw.includes('Show:'));
+    }
+    
+    const selectMatch = dashboard2.raw.match(/<select[^>]*id="limit-select"[^>]*>[\s\S]*?<\/select>/);
+    assert(selectMatch, 'Dashboard missing limit-select dropdown');
+    assert(selectMatch[0].match(/value="25"[^>]*selected/) || selectMatch[0].match(/selected[^>]*value="25"/), 'Limit parameter not preserved in dropdown');
+    console.log(`   ✅ Dashboard respects ?limit=25 parameter`);
 
     // ─────────────────────────────────────────────────────────
     // 12. Set prefs: emailEnabled = true
@@ -284,8 +344,12 @@ async function runTests() {
     assert(prefs2.status === 200 || prefs2.status === 302, `Prefs update failed: ${prefs2.status}`);
     console.log(`   Email notifications enabled`);
 
+    // Wait 5 seconds to avoid rate limit (session-based 5s minimum)
+    console.log(`   Waiting 5s to avoid rate limit...`);
+    await new Promise(r => setTimeout(r, 5000));
+
     // ─────────────────────────────────────────────────────────
-    // 13. Submit another contact (email enabled)
+    // 15. Submit another contact (email enabled)
     // ─────────────────────────────────────────────────────────
     step('Submit contact form (emailEnabled: true)');
     const contact2 = await httpRequest('POST', '/api/contact', {

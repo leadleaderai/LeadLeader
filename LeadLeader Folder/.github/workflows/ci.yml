@@ -46,6 +46,16 @@ jobs:
         OWNER_USERNAME: LeadLeaderCeo
         OWNER_PASSWORD: test12345
     
+    - name: Upload logs on failure
+      if: failure()
+      uses: actions/upload-artifact@v4
+      with:
+        name: test-logs-${{ matrix.node-version }}
+        path: |
+          /tmp/*.log
+          /tmp/*.ndjson
+        retention-days: 7
+    
     - name: Test summary
       if: always()
       run: |

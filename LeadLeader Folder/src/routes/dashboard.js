@@ -39,21 +39,29 @@ router.get('/dashboard', requireAuth, async (req, res) => {
     const userId = req.session.user.id;
     const username = req.session.user.username;
     const offset = Math.max(0, parseInt(req.query.offset) || 0);
-    const requestedLimit = parseInt(req.query.limit) || 50;
-    const limit = [10, 50, 100].includes(requestedLimit) ? requestedLimit : 50;
     
-    const events = await listEventsByUser(userId, { limit, offset });
-    const nextOffset = events.length === limit ? offset + limit : null;
+    // Parse and clamp limit to 1-200, default 50
+    const requestedLimit = parseInt(req.query.limit) || 50;
+    const limit = Math.max(1, Math.min(200, requestedLimit));
+    
+    // Parse type filter (optional)
+    const type = req.query.type || null;
+    
+    const { items, nextOffset } = await listEventsByUser(userId, { limit, offset });
+    const events = items || [];
     
     // Get user's plan and quota usage
     const plan = await getPlan(username) || 'free';
     const quotaUsage = await getQuotaUsage(userId, plan);
     
+    // Disable layout for this route (has own head/foot)
     res.render('dashboard', {
+      layout: false,
       title: 'Dashboard',
       events,
       nextOffset,
       limit,
+      type,
       plan,
       quotaUsage
     });

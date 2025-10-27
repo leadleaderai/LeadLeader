@@ -56,10 +56,11 @@
         
         <span style="margin-left:auto;font-size:14px;color:var(--text-muted);display:flex;gap:8px;align-items:center">
           <label for="limit-select">Show:</label>
-          <select id="limit-select" onchange="window.location.href='/dashboard?limit='+this.value" style="padding:4px 8px;background:var(--input-bg);color:var(--text-primary);border:1px solid var(--border-color);border-radius:4px;cursor:pointer;font-size:13px">
-            <option value="10" <%= (limit || 50) === 10 ? 'selected' : '' %>>10</option>
-            <option value="50" <%= (limit || 50) === 50 ? 'selected' : '' %>>50</option>
-            <option value="100" <%= (limit || 50) === 100 ? 'selected' : '' %>>100</option>
+          <select id="limit-select" onchange="window.location.href='/dashboard?limit='+this.value<%= type ? '&type='+encodeURIComponent(type) : '' %>" style="padding:4px 8px;background:var(--input-bg);color:var(--text-primary);border:1px solid var(--border-color);border-radius:4px;cursor:pointer;font-size:13px">
+            <option value="25" <%= limit == 25 ? 'selected' : '' %>>25</option>
+            <option value="50" <%= limit == 50 || !limit ? 'selected' : '' %>>50</option>
+            <option value="100" <%= limit == 100 ? 'selected' : '' %>>100</option>
+            <option value="200" <%= limit == 200 ? 'selected' : '' %>>200</option>
           </select>
         </span>
       </div>
@@ -84,7 +85,7 @@
       
       <% if (nextOffset) { %>
         <div style="margin-top:16px;text-align:center">
-          <a href="/dashboard?offset=<%= nextOffset %>&limit=<%= limit || 50 %>" style="color:var(--link-color)">Load more →</a>
+          <a href="/dashboard?offset=<%= nextOffset %>&limit=<%= limit || 50 %><% if (type) { %>&type=<%= type %><% } %>" style="color:var(--link-color)">Load more →</a>
         </div>
       <% } %>
       
