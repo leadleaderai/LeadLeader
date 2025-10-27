@@ -1,0 +1,54 @@
+name: CI
+
+on:
+  push:
+    branches: [ main, develop ]
+  pull_request:
+    branches: [ main, develop ]
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    
+    strategy:
+      matrix:
+        node-version: [20.x]
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+    
+    - name: Setup Node.js ${{ matrix.node-version }}
+      uses: actions/setup-node@v4
+      with:
+        node-version: ${{ matrix.node-version }}
+        cache: 'npm'
+    
+    - name: Verify Node version
+      run: |
+        node --version
+        npm --version
+    
+    - name: Install dependencies
+      run: npm ci
+    
+    - name: Run smoke tests
+      run: ./scripts/run_local_tests.sh
+      env:
+        NODE_ENV: development
+        TEST_PORT: 3456
+    
+    - name: Run E2E tests
+      run: npm run test:e2e
+      env:
+        NODE_ENV: development
+        TEST_PORT: 4567
+        OWNER_USERNAME: LeadLeaderCeo
+        OWNER_PASSWORD: test12345
+    
+    - name: Test summary
+      if: always()
+      run: |
+        echo "✅ CI pipeline complete"
+        echo "Tests run: smoke + E2E"
+        echo "No deployment performed (CI only)"

@@ -36,6 +36,28 @@ function render(templateName, format, data) {
 }
 
 /**
+ * Render template with file path directly
+ * @param {string} filePath - Full path to template file
+ * @param {object} vars - Variables to substitute
+ * @returns {string} Rendered content
+ */
+function renderTemplate(filePath, vars) {
+  if (!fs.existsSync(filePath)) {
+    throw new Error(`Template not found: ${filePath}`);
+  }
+  
+  let content = fs.readFileSync(filePath, 'utf8');
+  
+  Object.keys(vars).forEach(key => {
+    const value = String(vars[key] || '');
+    const regex = new RegExp(`\\{\\{${key}\\}\\}`, 'g');
+    content = content.replace(regex, value);
+  });
+  
+  return content;
+}
+
+/**
  * Basic HTML entity escaping (for pre tags, keep newlines)
  */
 function escapeHtml(text) {
@@ -47,4 +69,4 @@ function escapeHtml(text) {
     .replace(/'/g, '&#039;');
 }
 
-module.exports = { render };
+module.exports = { render, renderTemplate };

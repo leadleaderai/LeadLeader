@@ -8,7 +8,8 @@
     "dev": "NODE_ENV=development node src/server.js",
     "prepare": "husky install || true",
     "bootstrap": "node scripts/dev-bootstrap.js",
-    "smoke": "node scripts/smoke.js"
+    "smoke": "node scripts/smoke.js",
+    "test:e2e": "node test/e2e_now_roadmap.mjs"
   },
   "license": "ISC",
   "dependencies": {

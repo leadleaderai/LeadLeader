@@ -1,92 +1,64 @@
 // ═══════════════════════════════════════════════════════════
-// ROUTE: /dashboard.js - Display Google Sheets transcription data
+// ROUTE: /dashboard.js - User activity feed (NOW roadmap)
 // ═══════════════════════════════════════════════════════════
 
 const express = require('express');
 const router = express.Router();
-const { createPageData, formatDuration, formatTimestamp } = require('../utils/helpers');
-const { getSheetData } = require('../utils/sheets');
-const config = require('../utils/config');
+const { listEventsByUser } = require('../utils/store/eventsStore');
+const { getPlan } = require('../utils/usersStore');
+const requireAuth = (req, res, next) => req.session?.user ? next() : res.status(302).redirect('/auth/login');
 
-// ───────────────────────────────────────────────
-// ROUTE: /dashboard - Display last 10 transcriptions
-// SOURCE: Google Sheets (utils/sheets.js)
-// ───────────────────────────────────────────────
-router.get('/dashboard', async (req, res) => {
-  const pageData = createPageData({
-    title: 'Dashboard',
-    description: 'View recent voice transcriptions and analytics',
-    path: '/dashboard'
-  });
-
+// Get today's quota usage for a user
+async function getQuotaUsage(userId, plan) {
   try {
-    // Fetch data from Google Sheets
-    const spreadsheetId = config.SHEETS_SPREADSHEET_ID;
-    const sheetName = 'Calls';
+    const fs = require('fs').promises;
+    const quotasPath = '/workspaces/LeadLeader/LeadLeader Folder/data/quotas.json';
+    const content = await fs.readFile(quotasPath, 'utf8');
+    const data = JSON.parse(content);
     
-    let rows = [];
-    let stats = {
-      total: 0,
-      avgDuration: '0s',
-      today: 0,
-      lastUpdate: 'N/A'
-    };
+    const today = new Date().toISOString().split('T')[0];
+    const userQuotas = data.quotas?.[userId] || {};
+    const dailyKey = `contact_daily_${today}`;
+    const used = userQuotas[dailyKey] || 0;
+    
+    const limits = { free: 6, pro: 50, biz: 500 };
+    const limit = limits[plan] || limits.free;
+    
+    return { used, limit, remaining: Math.max(0, limit - used) };
+  } catch (err) {
+    return { used: 0, limit: 6, remaining: 6 };
+  }
+}
 
-    if (spreadsheetId && config.GOOGLE_SERVICE_ACCOUNT_JSON) {
-      try {
-        const data = await getSheetData(spreadsheetId, sheetName, config);
-        
-        if (data && data.length > 1) {
-          // Skip header row, get last 10 entries
-          const dataRows = data.slice(1);
-          rows = dataRows.slice(-10).reverse().map(row => ({
-            Timestamp: row[0] || '',
-            Tenant: row[1] || '',
-            Source: row[2] || '',
-            DurationSec: parseFloat(row[3]) || 0,
-            OrigFile: row[4] || '',
-            StoredPaths: row[5] || '',
-            Transcript: row[6] || ''
-          }));
-
-          // Calculate stats
-          stats.total = dataRows.length;
-          
-          const durations = dataRows
-            .map(row => parseFloat(row[3]))
-            .filter(d => !isNaN(d) && d > 0);
-          
-          if (durations.length > 0) {
-            const avgDur = durations.reduce((a, b) => a + b, 0) / durations.length;
-            stats.avgDuration = formatDuration(avgDur);
-          }
-
-          // Count today's calls
-          const today = new Date().toISOString().split('T')[0];
-          stats.today = dataRows.filter(row => {
-            const timestamp = row[0] || '';
-            return timestamp.startsWith(today);
-          }).length;
-
-          // Last update time
-          if (dataRows.length > 0) {
-            const lastRow = dataRows[dataRows.length - 1];
-            stats.lastUpdate = lastRow[0] ? formatTimestamp(lastRow[0]) : 'Unknown';
-          }
-        }
-      } catch (err) {
-        console.error('[dashboard] Failed to fetch sheets data:', err.message);
-        // Continue with empty data
-      }
-    }
-
+// ───────────────────────────────────────────────
+// ROUTE: /dashboard - Display last 50 events for user
+// SOURCE: eventsStore.js (NOW roadmap: In-App Results Feed)
+// ───────────────────────────────────────────────
+router.get('/dashboard', requireAuth, async (req, res) => {
+  try {
+    const userId = req.session.user.id;
+    const username = req.session.user.username;
+    const offset = Math.max(0, parseInt(req.query.offset) || 0);
+    const requestedLimit = parseInt(req.query.limit) || 50;
+    const limit = [10, 50, 100].includes(requestedLimit) ? requestedLimit : 50;
+    
+    const events = await listEventsByUser(userId, { limit, offset });
+    const nextOffset = events.length === limit ? offset + limit : null;
+    
+    // Get user's plan and quota usage
+    const plan = await getPlan(username) || 'free';
+    const quotaUsage = await getQuotaUsage(userId, plan);
+    
     res.render('dashboard', {
-      ...pageData,
-      rows,
-      stats
+      title: 'Dashboard',
+      events,
+      nextOffset,
+      limit,
+      plan,
+      quotaUsage
     });
   } catch (err) {
-    console.error('[dashboard] Error rendering dashboard:', err);
+    console.error('[dashboard] Error:', err);
     res.status(500).send('Failed to load dashboard');
   }
 });

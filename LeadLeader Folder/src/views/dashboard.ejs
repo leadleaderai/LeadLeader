@@ -1,153 +1,138 @@
-<div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-12">
-  <!-- Header -->
-  <div class="mb-8">
-    <h1 class="text-4xl font-bold text-gray-900 mb-2">
-      📊 Transcription Dashboard
-    </h1>
-    <p class="text-lg text-gray-600">
-      Recent voice transcriptions and analytics
-    </p>
-  </div>
-
-  <!-- Stats Cards -->
-  <div class="grid grid-cols-1 md:grid-cols-4 gap-6 mb-8">
-    <div class="bg-white rounded-lg shadow p-6">
-      <div class="flex items-center justify-between">
+<!DOCTYPE html>
+<html>
+<head>
+  <%- include('partials/head') %>
+</head>
+<body>
+  <main class="container" style="max-width:1000px;margin:32px auto;padding:16px">
+    <% if (typeof quotaUsage !== 'undefined' && quotaUsage && quotaUsage.used / quotaUsage.limit >= 0.8) { %>
+      <div role="alert" style="padding:16px;margin-bottom:24px;border-radius:8px;background:<%= quotaUsage.remaining === 0 ? 'var(--error-bg, #dc2626)' : 'orange' %>;color:white;display:flex;align-items:center;gap:12px">
+        <span style="font-size:24px">⚠️</span>
         <div>
-          <p class="text-sm font-medium text-gray-600">Total Calls</p>
-          <p class="text-3xl font-bold text-gray-900"><%= stats.total %></p>
-        </div>
-        <div class="w-12 h-12 bg-blue-100 rounded-lg flex items-center justify-center">
-          <svg class="w-6 h-6 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 5a2 2 0 012-2h3.28a1 1 0 01.948.684l1.498 4.493a1 1 0 01-.502 1.21l-2.257 1.13a11.042 11.042 0 005.516 5.516l1.13-2.257a1 1 0 011.21-.502l4.493 1.498a1 1 0 01.684.949V19a2 2 0 01-2 2h-1C9.716 21 3 14.284 3 6V5z" />
-          </svg>
-        </div>
-      </div>
-    </div>
-
-    <div class="bg-white rounded-lg shadow p-6">
-      <div class="flex items-center justify-between">
-        <div>
-          <p class="text-sm font-medium text-gray-600">Avg Duration</p>
-          <p class="text-3xl font-bold text-gray-900"><%= stats.avgDuration %></p>
-        </div>
-        <div class="w-12 h-12 bg-green-100 rounded-lg flex items-center justify-center">
-          <svg class="w-6 h-6 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
-          </svg>
-        </div>
-      </div>
-    </div>
-
-    <div class="bg-white rounded-lg shadow p-6">
-      <div class="flex items-center justify-between">
-        <div>
-          <p class="text-sm font-medium text-gray-600">Today</p>
-          <p class="text-3xl font-bold text-gray-900"><%= stats.today %></p>
-        </div>
-        <div class="w-12 h-12 bg-purple-100 rounded-lg flex items-center justify-center">
-          <svg class="w-6 h-6 text-purple-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
-          </svg>
-        </div>
-      </div>
-    </div>
-
-    <div class="bg-white rounded-lg shadow p-6">
-      <div class="flex items-center justify-between">
-        <div>
-          <p class="text-sm font-medium text-gray-600">Last Updated</p>
-          <p class="text-sm font-semibold text-gray-900"><%= stats.lastUpdate %></p>
-        </div>
-        <div class="w-12 h-12 bg-yellow-100 rounded-lg flex items-center justify-center">
-          <svg class="w-6 h-6 text-yellow-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
-          </svg>
-        </div>
-      </div>
-    </div>
-  </div>
-
-  <!-- Data Table -->
-  <div class="bg-white rounded-lg shadow overflow-hidden">
-    <div class="px-6 py-4 border-b border-gray-200">
-      <h2 class="text-lg font-semibold text-gray-900">Recent Transcriptions</h2>
-    </div>
-    
-    <% if (rows && rows.length > 0) { %>
-      <div class="overflow-x-auto">
-        <table class="min-w-full divide-y divide-gray-200">
-          <thead class="bg-gray-50">
-            <tr>
-              <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                Timestamp
-              </th>
-              <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                Tenant
-              </th>
-              <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                Source
-              </th>
-              <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                Duration
-              </th>
-              <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                Transcript
-              </th>
-            </tr>
-          </thead>
-          <tbody class="bg-white divide-y divide-gray-200">
-            <% rows.forEach(row => { %>
-              <tr class="hover:bg-gray-50">
-                <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                  <%= row.Timestamp %>
-                </td>
-                <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-600">
-                  <%= row.Tenant %>
-                </td>
-                <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-600">
-                  <%= row.Source %>
-                </td>
-                <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-600">
-                  <%= row.DurationSec %>s
-                </td>
-                <td class="px-6 py-4 text-sm text-gray-900 max-w-md truncate">
-                  <%= row.Transcript %>
-                </td>
-              </tr>
-            <% }) %>
-          </tbody>
-        </table>
-      </div>
-      
-      <div class="px-6 py-4 border-t border-gray-200 bg-gray-50">
-        <p class="text-sm text-gray-600">
-          Showing <%= rows.length %> most recent transcriptions
-        </p>
-      </div>
-    <% } else { %>
-      <div class="px-6 py-12 text-center">
-        <svg class="mx-auto h-12 w-12 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-        </svg>
-        <h3 class="mt-2 text-sm font-medium text-gray-900">No transcriptions yet</h3>
-        <p class="mt-1 text-sm text-gray-500">Get started by recording a demo.</p>
-        <div class="mt-6">
-          <a href="/demo" class="inline-flex items-center px-4 py-2 border border-transparent shadow-sm text-sm font-medium rounded-md text-white bg-blue-600 hover:bg-blue-700">
-            Try Demo
-          </a>
+          <div style="font-weight:600;margin-bottom:4px">
+            <% if (quotaUsage.remaining === 0) { %>
+              Daily quota limit reached
+            <% } else { %>
+              Approaching daily quota limit
+            <% } %>
+          </div>
+          <div style="font-size:14px;opacity:0.9">
+            <%= quotaUsage.used %>/<%= quotaUsage.limit %> contact submissions used today
+            <% if (quotaUsage.remaining > 0) { %>
+              (<%= quotaUsage.remaining %> remaining)
+            <% } %>
+          </div>
         </div>
       </div>
     <% } %>
-  </div>
-
-  <!-- Refresh Button -->
-  <div class="mt-6 text-center">
-    <button onclick="window.location.reload()" class="inline-flex items-center px-4 py-2 border border-gray-300 shadow-sm text-sm font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50">
-      <svg class="mr-2 h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
-      </svg>
-      Refresh Data
-    </button>
-  </div>
-</div>
+    
+    <div style="display:flex;justify-content:space-between;align-items:start;margin-bottom:24px;flex-wrap:wrap;gap:16px">
+      <h1 style="margin:0">Dashboard</h1>
+      
+      <% if (typeof quotaUsage !== 'undefined' && quotaUsage) { %>
+        <div style="padding:12px 16px;background:var(--card-bg);border:1px solid var(--border-color);border-radius:8px">
+          <div style="font-size:12px;color:var(--text-muted);margin-bottom:4px;text-transform:uppercase;letter-spacing:0.5px">Today's Contact Quota</div>
+          <div style="font-size:20px;font-weight:600;color:var(--text-primary)">
+            <%= quotaUsage.used %>/<%= quotaUsage.limit %>
+            <% if (typeof plan !== 'undefined' && plan) { %>
+              <span style="font-size:12px;margin-left:8px;padding:3px 8px;background:var(--link-color);color:white;border-radius:4px;text-transform:uppercase"><%= plan %></span>
+            <% } %>
+          </div>
+          <% if (quotaUsage.remaining === 0) { %>
+            <div style="font-size:12px;color:var(--error-text);margin-top:4px">⚠️ Limit reached</div>
+          <% } else if (quotaUsage.remaining <= 2) { %>
+            <div style="font-size:12px;color:orange;margin-top:4px">⚠️ <%= quotaUsage.remaining %> remaining</div>
+          <% } %>
+        </div>
+      <% } %>
+    </div>
+    
+    <% if (events && events.length > 0) { %>
+      <div style="margin-bottom:16px;display:flex;gap:8px;flex-wrap:wrap;align-items:center" role="group" aria-label="Event filters">
+        <span style="font-size:14px;color:var(--text-muted);margin-right:4px">Filter:</span>
+        <button class="filter-btn active" data-filter="all" aria-pressed="true" style="padding:6px 12px;background:var(--link-color);color:white;border:none;border-radius:4px;cursor:pointer;font-size:13px">All</button>
+        <button class="filter-btn" data-filter="contact_submitted" aria-pressed="false" style="padding:6px 12px;background:var(--card-bg);color:var(--text-primary);border:1px solid var(--border-color);border-radius:4px;cursor:pointer;font-size:13px">Contacts</button>
+        <button class="filter-btn" data-filter="system" aria-pressed="false" style="padding:6px 12px;background:var(--card-bg);color:var(--text-primary);border:1px solid var(--border-color);border-radius:4px;cursor:pointer;font-size:13px">System</button>
+        
+        <span style="margin-left:auto;font-size:14px;color:var(--text-muted);display:flex;gap:8px;align-items:center">
+          <label for="limit-select">Show:</label>
+          <select id="limit-select" onchange="window.location.href='/dashboard?limit='+this.value" style="padding:4px 8px;background:var(--input-bg);color:var(--text-primary);border:1px solid var(--border-color);border-radius:4px;cursor:pointer;font-size:13px">
+            <option value="10" <%= (limit || 50) === 10 ? 'selected' : '' %>>10</option>
+            <option value="50" <%= (limit || 50) === 50 ? 'selected' : '' %>>50</option>
+            <option value="100" <%= (limit || 50) === 100 ? 'selected' : '' %>>100</option>
+          </select>
+        </span>
+      </div>
+      
+      <div style="display:grid;gap:12px" id="events-container">
+        <% events.forEach(event => { %>
+          <div class="card event-card" data-type="<%= event.type %>" style="border:1px solid var(--border-color);border-radius:8px;padding:16px;background:var(--card-bg)">
+            <div style="display:flex;justify-content:space-between;align-items:start;margin-bottom:8px">
+              <span style="font-weight:600;text-transform:uppercase;font-size:12px;color:var(--link-color)">
+                <%= event.type %>
+              </span>
+              <span style="font-size:13px;color:var(--text-muted)">
+                <%= new Date(event.createdAt).toLocaleString() %>
+              </span>
+            </div>
+            <div style="font-size:14px;color:var(--text-secondary);background:var(--input-bg);padding:12px;border-radius:4px;overflow:auto;max-height:200px">
+              <pre style="margin:0;font-family:monospace;font-size:12px;white-space:pre-wrap"><%= JSON.stringify(event.payload, null, 2) %></pre>
+            </div>
+          </div>
+        <% }) %>
+      </div>
+      
+      <% if (nextOffset) { %>
+        <div style="margin-top:16px;text-align:center">
+          <a href="/dashboard?offset=<%= nextOffset %>&limit=<%= limit || 50 %>" style="color:var(--link-color)">Load more →</a>
+        </div>
+      <% } %>
+      
+      <script>
+        // Event filtering
+        const filterBtns = document.querySelectorAll('.filter-btn');
+        const eventCards = document.querySelectorAll('.event-card');
+        
+        filterBtns.forEach(btn => {
+          btn.addEventListener('click', () => {
+            const filter = btn.dataset.filter;
+            
+            // Update active state and aria-pressed
+            filterBtns.forEach(b => {
+              b.classList.remove('active');
+              b.setAttribute('aria-pressed', 'false');
+              b.style.background = 'var(--card-bg)';
+              b.style.color = 'var(--text-primary)';
+            });
+            btn.classList.add('active');
+            btn.setAttribute('aria-pressed', 'true');
+            btn.style.background = 'var(--link-color)';
+            btn.style.color = 'white';
+            
+            // Filter events
+            eventCards.forEach(card => {
+              if (filter === 'all' || card.dataset.type === filter) {
+                card.style.display = 'block';
+              } else {
+                card.style.display = 'none';
+              }
+            });
+          });
+        });
+      </script>
+    <% } else { %>
+      <div class="card" style="border:1px solid var(--border-color);border-radius:8px;padding:48px 32px;text-align:center;background:var(--card-bg)">
+        <div style="font-size:48px;margin-bottom:16px;opacity:0.5">📋</div>
+        <h2 style="margin:0 0 8px 0;color:var(--text-primary)">No Activity Yet</h2>
+        <p style="color:var(--text-muted);margin:0 0 24px 0">Your dashboard will show events once you start using the platform.</p>
+        <div style="display:flex;gap:12px;justify-content:center;flex-wrap:wrap">
+          <a href="/try" style="padding:10px 20px;background:var(--button-bg);color:var(--button-text);border-radius:6px;text-decoration:none;display:inline-block">Try Contact Form</a>
+          <a href="/contact" style="padding:10px 20px;background:transparent;color:var(--link-color);border:1px solid var(--link-color);border-radius:6px;text-decoration:none;display:inline-block">Contact Owner</a>
+        </div>
+      </div>
+    <% } %>
+  </main>
+  
+  <%- include('partials/foot') %>
+</body>
+</html>

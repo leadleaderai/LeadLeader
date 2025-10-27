@@ -1,0 +1,151 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <%- include('partials/head') %>
+</head>
+<body>
+  <main class="container" style="max-width:800px;margin:32px auto;padding:16px">
+    <h1 style="margin-bottom:24px">Inbox</h1>
+    
+    <% if (messages && messages.length > 0) { %>
+      <div style="display:flex;gap:12px;align-items:center;margin-bottom:16px;flex-wrap:wrap">
+        <label style="display:flex;align-items:center;gap:6px;cursor:pointer">
+          <input type="checkbox" id="selectAllCheckbox" style="cursor:pointer" aria-label="Select all messages">
+          <span style="font-size:14px">Select All</span>
+        </label>
+        
+        <button id="markSelectedBtn" style="padding:10px 20px;background:var(--button-bg);color:var(--button-text);border:none;border-radius:6px;cursor:pointer;font-size:14px;font-weight:500" aria-label="Mark selected messages as read">
+          Mark Selected as Read
+        </button>
+        
+        <button id="markAllBtn" style="padding:10px 20px;background:var(--card-bg);color:var(--text-primary);border:1px solid var(--border-color);border-radius:6px;cursor:pointer;font-size:14px;font-weight:500" aria-label="Mark all messages as read">
+          Mark All as Read
+        </button>
+        
+        <span style="font-size:13px;color:var(--text-muted);margin-left:auto">
+          Shortcut: Press <kbd style="padding:2px 6px;background:var(--card-bg);border:1px solid var(--border-color);border-radius:3px;font-size:12px">A</kbd> to mark all as read
+        </span>
+      </div>
+      
+      <div id="messagesList" style="display:grid;gap:12px;margin-bottom:16px">
+          <% messages.forEach(msg => { %>
+          <div class="card message-card" data-id="<%= msg.id %>" style="border:1px solid var(--border-color);border-radius:8px;padding:16px;background:var(--card-bg);display:flex;gap:12px">
+            <input type="checkbox" class="msg-checkbox" value="<%= msg.id %>" style="flex-shrink:0;margin-top:4px;cursor:pointer" <%= msg.read ? '' : 'checked' %> aria-label="Select message from <%= msg.fromUserId ? 'User' : 'Owner' %>">
+              <div style="flex:1">
+                <div style="display:flex;justify-content:space-between;align-items:start;margin-bottom:8px">
+                  <div style="display:flex;align-items:center;gap:8px">
+                    <span style="font-weight:600">
+                      <%= msg.fromUserId ? 'User' : 'Owner' %>
+                    </span>
+                    <% if (!msg.read) { %>
+                      <span style="display:inline-block;width:8px;height:8px;background:var(--link-color);border-radius:50%" title="Unread"></span>
+                    <% } %>
+                  </div>
+                  <span style="font-size:13px;color:var(--text-muted)">
+                    <%= new Date(msg.createdAt).toLocaleString() %>
+                  </span>
+                </div>
+                <p style="margin:0;color:var(--text-primary);white-space:pre-wrap"><%= msg.body %></p>
+              </div>
+            </div>
+          <% }) %>
+      </div>
+      
+      <% if (nextOffset) { %>
+        <div style="text-align:center">
+          <a href="/inbox?offset=<%= nextOffset %>" style="color:var(--link-color)">Load more →</a>
+        </div>
+      <% } %>
+      
+      <script>
+        const selectAllCheckbox = document.getElementById('selectAllCheckbox');
+        const markSelectedBtn = document.getElementById('markSelectedBtn');
+        const markAllBtn = document.getElementById('markAllBtn');
+        const messageCheckboxes = document.querySelectorAll('.msg-checkbox');
+        
+        // Select all toggle
+        selectAllCheckbox.addEventListener('change', () => {
+          messageCheckboxes.forEach(cb => cb.checked = selectAllCheckbox.checked);
+        });
+        
+        // Update select all state when individual checkboxes change
+        messageCheckboxes.forEach(cb => {
+          cb.addEventListener('change', () => {
+            const allChecked = Array.from(messageCheckboxes).every(c => c.checked);
+            const noneChecked = Array.from(messageCheckboxes).every(c => !c.checked);
+            selectAllCheckbox.checked = allChecked;
+            selectAllCheckbox.indeterminate = !allChecked && !noneChecked;
+          });
+        });
+        
+        // Mark selected as read
+        markSelectedBtn.addEventListener('click', async () => {
+          const selectedIds = Array.from(messageCheckboxes)
+            .filter(cb => cb.checked)
+            .map(cb => cb.value);
+          
+          if (selectedIds.length === 0) {
+            showToast('No messages selected', 'error');
+            return;
+          }
+          
+          try {
+            const res = await fetch('/inbox/read', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ ids: selectedIds })
+            });
+            
+            if (res.ok) {
+              showToast(`Marked ${selectedIds.length} message(s) as read`, 'success');
+              setTimeout(() => location.reload(), 1000);
+            } else {
+              showToast('Failed to mark messages as read', 'error');
+            }
+          } catch (err) {
+            showToast('Network error', 'error');
+          }
+        });
+        
+        // Mark all as read
+        async function markAllAsRead() {
+          try {
+            const res = await fetch('/inbox/mark-all-read', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' }
+            });
+            
+            if (res.ok) {
+              showToast('All messages marked as read', 'success');
+              setTimeout(() => location.reload(), 1000);
+            } else {
+              showToast('Failed to mark all messages as read', 'error');
+            }
+          } catch (err) {
+            showToast('Network error', 'error');
+          }
+        }
+        
+        markAllBtn.addEventListener('click', markAllAsRead);
+        
+        // Keyboard shortcut: 'a' to mark all as read
+        document.addEventListener('keydown', (e) => {
+          // Ignore if typing in input field or textarea
+          if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') return;
+          
+          if (e.key === 'a' || e.key === 'A') {
+            e.preventDefault();
+            markAllAsRead();
+          }
+        });
+      </script>
+    <% } else { %>
+      <div class="card" style="border:1px solid var(--border-color);border-radius:8px;padding:32px;text-align:center;background:var(--card-bg)">
+        <p style="color:var(--text-muted);margin:0">No messages yet.</p>
+      </div>
+    <% } %>
+  </main>
+  
+  <%- include('partials/foot') %>
+</body>
+</html>

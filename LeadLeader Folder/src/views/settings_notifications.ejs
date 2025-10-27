@@ -1,0 +1,59 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <%- include('partials/head') %>
+</head>
+<body>
+  <main class="container" style="max-width:600px;margin:32px auto;padding:16px">
+    <h1 style="margin-bottom:24px">Notification Preferences</h1>
+    
+    <form method="POST" action="/settings/notifications" style="display:grid;gap:20px">
+      <div class="card" style="border:1px solid var(--border-color);border-radius:8px;padding:20px;background:var(--card-bg)">
+        <label style="display:flex;align-items:center;gap:12px;cursor:pointer;margin-bottom:16px">
+          <input type="checkbox" name="emailEnabled" value="true" <%= prefs.emailEnabled ? 'checked' : '' %> id="email-enabled">
+          <div>
+            <div style="font-weight:600;margin-bottom:4px">Email Notifications</div>
+            <div style="font-size:13px;color:var(--text-muted)">Receive notifications via email</div>
+          </div>
+        </label>
+        
+        <% if (!prefs.emailEnabled) { %>
+          <div style="padding:8px 12px;background:var(--input-bg);border-left:3px solid var(--text-muted);margin-bottom:16px;font-size:13px;color:var(--text-muted)">
+            ℹ️ Emails are off. You'll still see results in your dashboard.
+          </div>
+        <% } %>
+        
+        <label style="display:flex;align-items:center;gap:12px;cursor:pointer;margin-bottom:16px">
+          <input type="checkbox" name="inAppEnabled" value="true" <%= prefs.inAppEnabled ? 'checked' : '' %>>
+          <div>
+            <div style="font-weight:600;margin-bottom:4px">In-App Notifications</div>
+            <div style="font-size:13px;color:var(--text-muted)">Show activity in your dashboard feed</div>
+          </div>
+        </label>
+        
+        <div>
+          <label style="font-weight:600;margin-bottom:8px;display:block">Digest Cadence</label>
+          <select name="digestCadence" style="width:100%;padding:8px;background:var(--input-bg);border:1px solid var(--input-border);border-radius:4px;color:var(--text-primary)">
+            <option value="none" <%= prefs.digestCadence === 'none' ? 'selected' : '' %>>None</option>
+            <option value="daily" <%= prefs.digestCadence === 'daily' ? 'selected' : '' %>>Daily</option>
+            <option value="weekly" <%= prefs.digestCadence === 'weekly' ? 'selected' : '' %>>Weekly</option>
+          </select>
+          <div style="font-size:13px;color:var(--text-muted);margin-top:4px">How often to receive digest emails (future feature)</div>
+        </div>
+      </div>
+      
+      <button type="submit" style="padding:12px 24px;background:var(--button-bg);color:var(--button-text);border:none;border-radius:6px;cursor:pointer;font-size:16px;font-weight:600">
+        Save Preferences
+      </button>
+      
+      <% if (typeof message !== 'undefined' && message) { %>
+        <div style="padding:12px;background:var(--success-bg);color:var(--success-text);border-radius:6px;text-align:center">
+          <%= message %>
+        </div>
+      <% } %>
+    </form>
+  </main>
+  
+  <%- include('partials/foot') %>
+</body>
+</html>

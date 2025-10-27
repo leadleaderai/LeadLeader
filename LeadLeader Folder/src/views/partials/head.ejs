@@ -18,15 +18,27 @@
   </nav>
   <div style="display:flex;gap:12px;align-items:center">
     <% if (typeof user !== 'undefined' && user) { %>
-      <span style="margin-right:8px;color:var(--text-secondary)">@<%= user.username %></span>
+      <span style="margin-right:8px;color:var(--text-secondary)">
+        @<%= user.username %>
+        <% if (typeof userPlan !== 'undefined' && userPlan && userPlan !== 'free') { %>
+          <span style="display:inline-block;padding:2px 6px;margin-left:4px;background:var(--link-color);color:white;border-radius:4px;font-size:10px;font-weight:600;text-transform:uppercase" aria-label="<%= userPlan %> plan"><%= userPlan %></span>
+        <% } %>
+      </span>
       <a href="/dashboard">Dashboard</a>
+      <a href="/inbox" style="position:relative" <% if (typeof unreadCount !== 'undefined' && unreadCount > 0) { %>aria-label="Inbox, <%= unreadCount %> unread"<% } else { %>aria-label="Inbox"<% } %>>
+        Inbox
+        <% if (typeof unreadCount !== 'undefined' && unreadCount > 0) { %>
+          <span style="position:absolute;top:-8px;right:-8px;display:inline-block;min-width:18px;height:18px;padding:2px 4px;background:#ef4444;color:white;border-radius:9px;font-size:11px;font-weight:600;line-height:14px;text-align:center" aria-hidden="true"><%= unreadCount %></span>
+        <% } %>
+      </a>
+      <a href="/settings/notifications" aria-label="Notification settings">Settings</a>
       <form method="post" action="/auth/logout" style="display:inline;margin:0">
-        <button type="submit" style="background:none;border:none;color:var(--link-color);cursor:pointer;text-decoration:underline">Logout</button>
+        <button type="submit" style="background:none;border:none;color:var(--link-color);cursor:pointer;text-decoration:underline" aria-label="Log out">Logout</button>
       </form>
     <% } else { %>
       <a href="/auth/login">Log in</a><a href="/auth/signup">Sign up</a>
     <% } %>
-    <button id="theme-toggle" aria-label="Toggle theme" style="background:none;border:none;cursor:pointer;color:inherit;padding:4px 8px"><span id="theme-icon"></span></button>
+    <button id="theme-toggle" aria-label="Toggle dark mode" style="background:none;border:none;cursor:pointer;color:inherit;padding:4px 8px"><span id="theme-icon" aria-hidden="true"></span></button>
   </div>
 </header>
 <main class="container" style="padding:16px">

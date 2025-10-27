@@ -127,8 +127,36 @@ async function sendContactFormEmail({ name, email, message }, recipients) {
   });
 }
 
+/**
+ * Send contact email with validation and error handling
+ * @param {object} data - {name, email, message}
+ * @returns {Promise<{ok: boolean, error?: string}>}
+ */
+async function sendContactEmail({ name, email, message }) {
+  try {
+    // Validate environment
+    if (!config.SENDGRID_API_KEY || !config.SENDGRID_FROM) {
+      return { ok: false, error: 'Email service not configured' };
+    }
+
+    const recipients = (config.RECIPIENTS || []).filter(Boolean);
+    if (!recipients.length) {
+      return { ok: false, error: 'No recipients configured' };
+    }
+
+    // Send using template system
+    await sendContactFormEmail({ name, email, message }, recipients);
+    return { ok: true };
+  } catch (error) {
+    // Redact secrets from error messages
+    const safeError = String(error.message || 'Send failed').replace(/SG\.[A-Za-z0-9_-]+/g, '[REDACTED]');
+    return { ok: false, error: safeError };
+  }
+}
+
 module.exports = {
   sendEmail,
   sendTranscriptionEmail,
-  sendContactFormEmail
+  sendContactFormEmail,
+  sendContactEmail
 };

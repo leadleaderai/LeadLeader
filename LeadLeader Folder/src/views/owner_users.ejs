@@ -1,8 +1,11 @@
 <%- include('partials/head', { title: title || 'Owner: Users' }) %>
 <h1>Owner: Users</h1>
 <p>Owner (<code>LeadLeaderCeo</code>) is env-only and cannot be edited here.</p>
-<table border="1" cellpadding="6" cellspacing="0">
-  <thead><tr><th>Username</th><th>Role</th><th>Created</th><th>Actions</th></tr></thead>
+
+<input type="text" id="userSearch" placeholder="🔍 Search users..." style="width:100%;max-width:400px;padding:8px;margin-bottom:16px;background:var(--input-bg);border:1px solid var(--input-border);border-radius:4px;color:var(--text-primary)">
+
+<table border="1" cellpadding="6" cellspacing="0" id="usersTable">
+  <thead><tr><th>Username</th><th>Role</th><th>Plan</th><th>Created</th><th>Actions</th></tr></thead>
   <tbody>
     <% (users||[]).forEach(u=>{ %>
       <tr>
@@ -13,10 +16,18 @@
             <option value="mod"  <%= u.role==='mod'?'selected':'' %>>mod</option>
           </select>
         </td>
+        <td>
+          <select data-username="<%= u.username %>" class="planSel">
+            <option value="free" <%= (u.plan||'free')==='free'?'selected':'' %>>free</option>
+            <option value="pro"  <%= u.plan==='pro'?'selected':'' %>>pro</option>
+            <option value="biz"  <%= u.plan==='biz'?'selected':'' %>>biz</option>
+          </select>
+        </td>
         <td><%= u.createdAt %></td>
         <td>
           <button class="renameBtn" data-username="<%= u.username %>" style="margin-right:4px">Rename</button>
           <button class="resetBtn"  data-username="<%= u.username %>" style="margin-right:4px">Reset Password</button>
+          <button class="dmBtn" data-username="<%= u.username %>" data-userid="<%= u.id %>" style="margin-right:4px;background:var(--link-color);color:white">Send DM</button>
           <button class="deleteBtn" data-username="<%= u.username %>" style="background:var(--error-bg);color:var(--error-text)">Delete</button>
         </td>
       </tr>
@@ -24,10 +35,21 @@
   </tbody>
 </table>
 <script>
+// User search filter
+document.getElementById('userSearch').addEventListener('input', (e) => {
+  const query = e.target.value.toLowerCase();
+  document.querySelectorAll('#usersTable tbody tr').forEach(row => {
+    const username = row.querySelector('td:first-child').textContent.toLowerCase();
+    row.style.display = username.includes(query) ? '' : 'none';
+  });
+});
+
 async function j(url,body){const r=await fetch(url,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});return r.json()}
-document.querySelectorAll('.roleSel').forEach(s=>s.addEventListener('change',async()=>{const out=await j('/owner/users/role',{username:s.dataset.username,role:s.value}); if(!out.ok) alert(out.error||'Role update failed')}));
-document.querySelectorAll('.renameBtn').forEach(b=>b.addEventListener('click',async()=>{const oldName=b.dataset.username; const nn=prompt('New username for '+oldName+':'); if(!nn) return; const out=await j('/owner/users/rename',{oldName:oldName,newName:nn}); if(out.ok) location.reload(); else alert(out.error||'Rename failed')}));
-document.querySelectorAll('.resetBtn').forEach(b=>b.addEventListener('click',async()=>{const u=b.dataset.username; const p=prompt('New password for '+u+': (min 8 chars)'); if(!p) return; const out=await j('/owner/users/reset',{username:u,newPassword:p}); if(!out.ok) alert(out.error||'Reset failed')}));
-document.querySelectorAll('.deleteBtn').forEach(b=>b.addEventListener('click',async()=>{const u=b.dataset.username; if(!confirm('Delete user '+u+'? This cannot be undone.')) return; const out=await j('/owner/users/delete',{username:u}); if(out.ok) location.reload(); else alert(out.error||'Delete failed')}));
+document.querySelectorAll('.roleSel').forEach(s=>s.addEventListener('change',async()=>{const out=await j('/owner/users/role',{username:s.dataset.username,role:s.value}); showToast(out.ok?'Role updated':'Role update failed: '+(out.error||'unknown'),out.ok?'success':'error')}));
+document.querySelectorAll('.planSel').forEach(s=>s.addEventListener('change',async()=>{const out=await j('/owner/users/plan',{username:s.dataset.username,plan:s.value}); showToast(out.ok?'Plan updated':'Plan update failed: '+(out.error||'unknown'),out.ok?'success':'error')}));
+document.querySelectorAll('.renameBtn').forEach(b=>b.addEventListener('click',async()=>{const oldName=b.dataset.username; const nn=prompt('New username for '+oldName+':'); if(!nn) return; const out=await j('/owner/users/rename',{oldName:oldName,newName:nn}); if(out.ok) location.reload(); else showToast('Rename failed: '+(out.error||'unknown'),'error')}));
+document.querySelectorAll('.resetBtn').forEach(b=>b.addEventListener('click',async()=>{const u=b.dataset.username; const p=prompt('New password for '+u+': (min 8 chars)'); if(!p) return; const out=await j('/owner/users/reset',{username:u,newPassword:p}); showToast(out.ok?'Password reset':'Reset failed: '+(out.error||'unknown'),out.ok?'success':'error')}));
+document.querySelectorAll('.dmBtn').forEach(b=>b.addEventListener('click',async()=>{const uid=b.dataset.userid; const msg=prompt('Message to send to '+b.dataset.username+':'); if(!msg) return; const out=await j('/owner/dm',{toUserId:uid,body:msg}); showToast(out.ok?'DM sent!':'DM failed: '+(out.error||'unknown'),out.ok?'success':'error')}));
+document.querySelectorAll('.deleteBtn').forEach(b=>b.addEventListener('click',async()=>{const u=b.dataset.username; if(!confirm('Delete user '+u+'? This cannot be undone.')) return; const out=await j('/owner/users/delete',{username:u}); if(out.ok) location.reload(); else showToast('Delete failed: '+(out.error||'unknown'),'error')}));
 </script>
 <%- include('partials/foot') %>

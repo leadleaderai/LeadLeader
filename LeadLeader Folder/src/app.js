@@ -29,6 +29,8 @@ const tryRoutes = require('./routes/try');
 const systemRoutes = require('./routes/system');
 const ownerRoutes = require('./routes/owner');
 const authRoutes = require('./routes/auth');
+const userSettingsRoutes = require('./routes/userSettings');
+const devRoutes = require('./routes/dev');
 
 // Simple defensive routes (no dependencies on complex state)
 const trySimpleRoutes = require('./routes/try_simple');
@@ -41,6 +43,7 @@ const app = express();
 
 // Trust proxy for accurate IP detection (required for Fly.io and rate limiting)
 app.set('trust proxy', 1);
+app.disable('x-powered-by');
 
 // ───────────────────────────────────────────────
 // Security middleware (helmet)
@@ -84,15 +87,15 @@ app.set('layout', 'layout');
 app.use(express.json({ limit: "1mb" }));
 app.use(express.urlencoded({ extended: true, limit: "1mb" }));
 
-// Serve static files from public directory
-app.use(express.static(path.join(__dirname, 'public')));
+// Serve static files from public directory with caching
+app.use(express.static(path.join(__dirname, 'public'), { maxAge: '7d', etag: true }));
 
 // ───────────────────────────────────────────────
-// Template locals middleware
+// Template locals middleware (optimized)
 // ───────────────────────────────────────────────
-app.use((req, res, next) => {
+app.use(async (req, res, next) => {
   // Set default locals for all templates
-  res.locals.version = 'v0.1';
+  res.locals.version = config.APP_VERSION || process.env.FLY_ALLOC_ID || 'v0.1';
   res.locals.baseUrl = config.PUBLIC_BASE_URL || "";
   res.locals.businessPhone = config.BUSINESS_PHONE || "";
   res.locals.user = (req.session && req.session.user) || null;
@@ -105,6 +108,27 @@ app.use((req, res, next) => {
     { href: '/contact', label: 'Contact', active: req.path === '/contact' }
   ];
   res.locals.description = res.locals.description || 'LeadLeader - AI-powered call assistant';
+  
+  // Add unread count and user plan for authenticated users (single query each)
+  if (req.session?.user?.id) {
+    try {
+      const { getUnreadCount } = require('./utils/store/messagesStore');
+      const { getPlan } = require('./utils/usersStore');
+      
+      // Fast unread count (single read, no pagination)
+      res.locals.unreadCount = await getUnreadCount(req.session.user.id);
+      
+      // Get user plan
+      res.locals.userPlan = await getPlan(req.session.user.username) || 'free';
+    } catch (err) {
+      res.locals.unreadCount = 0;
+      res.locals.userPlan = 'free';
+    }
+  } else {
+    res.locals.unreadCount = 0;
+    res.locals.userPlan = 'free';
+  }
+  
   next();
 });
 
@@ -230,6 +254,8 @@ app.use('/', authRoutes); // Auth routes (login, signup, logout, dashboard)
 app.use('/', mainRoutes);
 app.use('/', demoRoutes);
 app.use('/', dashboardRoutes);
+app.use('/', userSettingsRoutes); // Inbox & notification settings (NOW roadmap)
+app.use('/', devRoutes); // Development seed endpoints (NOW roadmap)
 app.use('/', apiRoutes);
 app.use('/', adminRoutes);
 app.use('/api/v1', apiV1Routes);

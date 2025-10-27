@@ -1,3 +1,44 @@
 {
-  "users": []
+  "users": [
+    {
+      "id": "u_h651bqialkp",
+      "username": "testuser_1761533878466",
+      "passHash": "$2a$10$2M9gfMynm0RZKXBjn/Zrm.tJTbW321NxjZsvR9Ys0uABYUEn1mDcy",
+      "role": "user",
+      "plan": "free",
+      "createdAt": "2025-10-27T02:57:58.600Z"
+    },
+    {
+      "id": "u_dkm6hcl40pp",
+      "username": "testuser_1761534022869",
+      "passHash": "$2a$10$ay2mm/K1aHuylNWRbrXC5uad822WOJQBTemQaCIDSDligzNeHZl8S",
+      "role": "user",
+      "plan": "free",
+      "createdAt": "2025-10-27T03:00:22.973Z"
+    },
+    {
+      "id": "u_s4cdzkkfjk",
+      "username": "testuser_1761534078069",
+      "passHash": "$2a$10$tCIDp930DMK0u7LfCxLzweUtUrnWwmHYIESMr7aQqW/DpzpeTjb5u",
+      "role": "user",
+      "plan": "free",
+      "createdAt": "2025-10-27T03:01:18.173Z"
+    },
+    {
+      "id": "u_yhac3srkm47",
+      "username": "testuser_1761534103875",
+      "passHash": "$2a$10$T08I984IGgVCR9NtDSKbVuLp6alBQODrhhi464igWx9.SUHY7xX5G",
+      "role": "user",
+      "plan": "free",
+      "createdAt": "2025-10-27T03:01:43.978Z"
+    },
+    {
+      "id": "u_n19eh1v8x2g",
+      "username": "testuser_1761534150681",
+      "passHash": "$2a$10$tHxEvqwqQ/wQcfyo6VK7s.dQjb.W6lPlpZqAiejdbUztzgzRZodsq",
+      "role": "user",
+      "plan": "pro",
+      "createdAt": "2025-10-27T03:02:30.796Z"
+    }
+  ]
 }
